@@ -1,0 +1,6 @@
+# Netlify Configuration
+[[redirects]]
+  from = "/api/data"
+  to = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSU9NpgyN3RgNiPntHNLMDVmZNdfdop55kuW1ZLZQ8YqVGjawosab7uhZsaFuUcxdk_VOZ9NBd_qpiZ/pub?output=csv"
+  status = 200
+  force = true

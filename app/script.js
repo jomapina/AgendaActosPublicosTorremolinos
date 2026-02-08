@@ -1,7 +1,12 @@
 // --- NAMESPACE & CONFIG ---
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+const csvUrl = isLocal
+    ? 'https://corsproxy.io/?' + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSU9NpgyN3RgNiPntHNLMDVmZNdfdop55kuW1ZLZQ8YqVGjawosab7uhZsaFuUcxdk_VOZ9NBd_qpiZ/pub?output=csv')
+    : '/api/data';
+
 const App = {
     config: {
-        csvUrl: 'https://corsproxy.io/?' + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSU9NpgyN3RgNiPntHNLMDVmZNdfdop55kuW1ZLZQ8YqVGjawosab7uhZsaFuUcxdk_VOZ9NBd_qpiZ/pub?output=csv'),
+        csvUrl: csvUrl,
         colors: ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
     },
 
@@ -67,7 +72,8 @@ const App = {
             const el = document.getElementById('lastUpdated');
             if (el) el.textContent = 'Cargando...';
 
-            Papa.parse(App.config.csvUrl + '&t=' + Date.now(), {
+            const sep = App.config.csvUrl.includes('?') ? '&' : '?';
+            Papa.parse(App.config.csvUrl + sep + 't=' + Date.now(), {
                 download: true, header: false,
                 complete: (results) => {
                     App.data.process(results.data);
