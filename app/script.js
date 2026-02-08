@@ -16,7 +16,7 @@ const App = {
         globalFilteredEvents: [],
         agenda: {
             currentWeekStart: null,
-            currentView: 'week', // week, month, list
+            viewMode: 'month', // week, month, list
             quickFilters: { police: false, stage: false, mega: false },
         },
         incidents: [],
@@ -47,7 +47,7 @@ const App = {
             if (window.lucide) lucide.createIcons();
 
             // Set initial active states for buttons if needed
-            App.agenda.render();
+            App.agenda.setView(App.state.agenda.viewMode);
         } catch (e) {
             console.error("Critical Init Error:", e);
             alert("Error al iniciar: " + e.message);
@@ -288,6 +288,7 @@ const App = {
             const mode = App.state.agenda.viewMode;
 
             if (mode === 'month') {
+                d.setDate(1); // Reset to 1st to avoid skipping.
                 d.setMonth(d.getMonth() + dir);
             } else {
                 // Default: Week or List -> shift 7 days
@@ -684,7 +685,40 @@ const App = {
             });
         },
 
-        exportTechPdf: () => { alert("Función de exportación pendiente de actualización para nueva estructura."); }
+        exportPdf: () => {
+            // Strategy: Clone the element, remove constraints, export, then destroy.
+            const original = document.getElementById('tab-reports');
+            const clone = original.cloneNode(true);
+
+            // Setup clone styles to ensure full height capture
+            clone.style.width = '1200px'; // Fixed width for consistent scale
+            clone.style.height = 'auto';
+            clone.style.position = 'absolute';
+            clone.style.top = '-9999px'; // Hide off-screen but keep rendering
+            clone.style.left = '0';
+            clone.style.overflow = 'visible';
+            clone.style.background = 'white';
+            clone.classList.remove('view-container'); // Remove flex/scroll constraints if any
+
+            // Remove non-printable elements from clone
+            const buttons = clone.querySelectorAll('button, .no-print');
+            buttons.forEach(b => b.remove());
+
+            document.body.appendChild(clone);
+
+            const opt = {
+                margin: [0.3, 0.3, 0.3, 0.3], // top, left, bottom, right
+                filename: `Informe_Agenda_${new Date().toLocaleDateString().replace(/\//g, '-')}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, scrollY: 0, windowHeight: clone.scrollHeight },
+                jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' },
+                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+            };
+
+            html2pdf().set(opt).from(clone).save().then(() => {
+                document.body.removeChild(clone);
+            });
+        }
     },
 
     ui: {
@@ -831,9 +865,9 @@ const App = {
 
                     html += `<div onclick="App.ui.openDrawerId(${e.rawId})" 
                         style="position:absolute; top:${exactTop}px; height:${height}px; left:${left}%; width:${widthPct}%;
-                        background:${col}20; border-left:3px solid ${col}; border-radius:3px; 
-                        padding:2px 4px; font-size:0.75rem; overflow:hidden; cursor:pointer; z-index:5; box-shadow:0 1px 2px rgba(0,0,0,0.1); border:1px solid white;">
-                        <strong style="color:${col}">${e.title}</strong>
+                        background:${col}44; border:1px solid ${col}; border-radius:3px; 
+                        padding:2px 4px; font-size:0.75rem; overflow:hidden; cursor:pointer; z-index:5; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
+                        <strong style="color:#1e293b">${e.title}</strong>
                     </div>`;
                 });
                 html += '</div>';
@@ -854,7 +888,7 @@ const App = {
 
             const d = App.state.agenda.currentWeekStart || new Date();
             const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
-            const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+            const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
             const events = data.filter(e => e.start <= mEnd && e.end >= mStart);
 
             const lbl = document.getElementById('weekLabel'); // Shared label
@@ -898,18 +932,32 @@ const App = {
                         `).join('')}
                     </div>
 
-                    <!-- Timed Section (Columns) -->
-                    <div style="flex:1; display:flex; flex-direction:row; align-items:stretch; gap:1px;">
-                        ${timedEvts.map(e => `
+                    <!-- Timed Section (Rows) -->
+                    <div style="flex:1; display:flex; flex-direction:column; gap:1px;">
+                        ${timedEvts.map(e => {
+                    const duration = (e.end - e.start) / 3600000; // hours
+                    const h = Math.floor(duration);
+                    const m = Math.round((duration % 1) * 60);
+                    const durStr = `${h}:${m.toString().padStart(2, '0')}h`;
+
+                    let heightClass = 'min-height:24px'; // default/short
+                    if (duration >= 2) heightClass = 'min-height:45px';
+                    if (duration >= 4) heightClass = 'min-height:70px';
+
+                    return `
                             <div onclick="App.ui.openDrawerId(${e.rawId})" 
-                                 title="${e.title}"
-                                 style="flex:1; cursor:pointer; font-size:0.7em; background:${App.state.delegationColors[e.delegation] || '#ccc'}44; color:#1e293b; 
-                                 border-radius:2px; border:1px solid ${App.state.delegationColors[e.delegation] || '#ccc'}; 
-                                 padding:2px; overflow:hidden; display:flex; flex-direction:column; justify-content:start;">
-                                 <strong style="font-size:0.9em; display:block;">${e.start.getHours()}:${e.start.getMinutes().toString().padStart(2, '0')}</strong>
-                                 <span style="line-height:1.1; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">${e.title}</span>
+                                 title="${e.title} (${durStr})"
+                                 style="cursor:pointer; font-size:0.75em; background:${App.state.delegationColors[e.delegation] || '#ccc'}44; color:#1e293b; 
+                                 border-radius:3px; border:1px solid ${App.state.delegationColors[e.delegation] || '#ccc'}; 
+                                 padding:2px 4px; overflow:hidden; display:flex; flex-direction:column; justify-content:start; ${heightClass}; margin-bottom:1px; flex: 0 0 auto;">
+                                 <div style="display:flex; justify-content:space-between; align-items:baseline">
+                                     <strong style="font-size:0.85em;">${e.start.getHours().toString().padStart(2, '0')}:${e.start.getMinutes().toString().padStart(2, '0')}</strong>
+                                     ${duration >= 2 ? `<span style="opacity:0.6; font-size:0.8em">${durStr}</span>` : ''}
+                                 </div>
+                                 <span style="line-height:1.1; font-weight:500; display:-webkit-box; -webkit-line-clamp:${duration >= 4 ? 4 : duration >= 2 ? 2 : 1}; -webkit-box-orient:vertical; overflow:hidden;">${e.title}</span>
+                                 ${duration >= 4 ? `<div style="margin-top:auto; font-size:0.8em; opacity:0.7">📍 ${e.place}</div>` : ''}
                             </div>
-                        `).join('')}
+                        `}).join('')}
                     </div>
                  </div>`;
             }
@@ -996,11 +1044,7 @@ const App = {
                      ${e.contracts ? '<span class="chip-toggle active">Contratos</span>' : ''}
                  </div>
                  <hr style="margin:1rem 0; border-top:1px solid #eee">
-                 <div style="font-size:0.75rem; color:#94a3b8; background:#f8fafc; padding:8px; border-radius:4px;">
-                    <strong>Datos Originales (Debug):</strong><br>
-                    Inicio: "${e.debug.d1}" (Hora: "${e.debug.t1}")<br>
-                    Fin: "${e.debug.d2}" (Hora: "${e.debug.t2}")
-                 </div>
+
              `;
             document.getElementById('drawerOverlay').classList.remove('hidden');
         },

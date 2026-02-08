@@ -190,9 +190,9 @@
 
                     <!-- View Switcher -->
                     <div class="view-switcher-pill">
-                        <button class="pill-btn active" onclick="App.agenda.setView('week')"
-                            id="btnViewWeek">Semana</button>
-                        <button class="pill-btn" onclick="App.agenda.setView('month')" id="btnViewMonth">Mes</button>
+                        <button class="pill-btn" onclick="App.agenda.setView('week')" id="btnViewWeek">Semana</button>
+                        <button class="pill-btn active" onclick="App.agenda.setView('month')"
+                            id="btnViewMonth">Mes</button>
                         <button class="pill-btn" onclick="App.agenda.setView('list')" id="btnViewList">Lista</button>
                     </div>
                 </header>
@@ -219,6 +219,10 @@
         <!-- TAB 3: REPORTS -->
         <main id="tab-reports" class="view-container">
             <div class="reports-layout">
+                <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem">
+                    <h2>Panel de Informes</h2>
+                    <button class="btn-primary" onclick="App.reports.exportPdf()">Descargar Informe</button>
+                </header>
                 <!-- 1. GENERALES -->
                 <section class="report-section">
                     <h3 class="section-title">1. Resumen General</h3>
@@ -412,7 +416,6 @@
                         <h2>Gestión de Coincidencias</h2>
                         <p class="text-sm text-muted">Conflictos espaciales y de servicios</p>
                     </div>
-                    <button class="btn-primary" onclick="App.incidents.exportPdf()">Descargar Informe</button>
                 </header>
 
                 <div class="incidents-dashboard-grid">

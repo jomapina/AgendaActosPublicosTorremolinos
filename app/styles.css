@@ -769,12 +769,22 @@ body {
     font-size: 0.8rem;
 }
 
-.danger-zone .kpi-card.warning { border-left: 4px solid var(--warning); }
-.danger-zone .kpi-card.danger { border-left: 4px solid var(--danger); }
-.caption { font-size: 0.7rem; color: var(--text-muted); }
+.danger-zone .kpi-card.warning {
+    border-left: 4px solid var(--warning);
+}
+
+.danger-zone .kpi-card.danger {
+    border-left: 4px solid var(--danger);
+}
+
+.caption {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
 
 /* RESPONSIVE DESIGN */
 @media (max-width: 768px) {
+
     /* 1. GENERAL & NAV */
     .main-nav {
         padding: 0 1rem;
@@ -784,7 +794,7 @@ body {
         justify-content: center;
         padding-bottom: 8px;
     }
-    
+
     .nav-brand {
         width: 100%;
         justify-content: center;
@@ -805,11 +815,13 @@ body {
     }
 
     .nav-actions {
-        display: none; /* Hide refresh on mobile to save space, rely on pull or auto */
+        display: none;
+        /* Hide refresh on mobile to save space, rely on pull or auto */
     }
 
     .view-container {
-        height: calc(100vh - 110px); /* Adjust for taller nav */
+        height: calc(100vh - 110px);
+        /* Adjust for taller nav */
     }
 
     /* 2. FILTERS TAB */
@@ -822,17 +834,19 @@ body {
         width: 100%;
         border-right: none;
         border-bottom: 1px solid var(--border);
-        max-height: 40vh; /* Limit height so results are visible */
+        max-height: 40vh;
+        /* Limit height so results are visible */
         flex-shrink: 0;
     }
 
     .filter-scroll-area {
-        grid-template-columns: 1fr; /* Single column filters */
+        grid-template-columns: 1fr;
+        /* Single column filters */
         padding: 1rem;
         gap: 1rem;
     }
 
-    .filter-scroll-area .form-group, 
+    .filter-scroll-area .form-group,
     .filter-scroll-area .form-group:nth-child(2),
     .filter-scroll-area .form-group:last-child {
         grid-column: span 1;
@@ -840,7 +854,8 @@ body {
 
     .filter-results-preview {
         padding: 1rem;
-        overflow-y: visible; /* Let parent scroll */
+        overflow-y: visible;
+        /* Let parent scroll */
     }
 
     /* 3. AGENDA TAB */
@@ -857,7 +872,7 @@ body {
         justify-content: center;
         margin-bottom: 4px;
     }
-    
+
     .date-nav {
         order: 2;
         width: 100%;
@@ -883,18 +898,20 @@ body {
     }
 
     .agenda-content-area {
-        height: calc(100% - 100px); /* Adjust for taller bar */
+        height: calc(100% - 100px);
+        /* Adjust for taller bar */
     }
 
     /* Week Grid Mobile */
     .week-grid {
-        min-width: 600px; /* Force scroll */
+        min-width: 600px;
+        /* Force scroll */
     }
-    
+
     /* Month Grid Mobile */
     .month-grid {
-       /* Allow default grid behavior but maybe smaller text */
-       font-size: 0.8rem;
+        /* Allow default grid behavior but maybe smaller text */
+        font-size: 0.8rem;
     }
 
     /* List View Mobile */
@@ -907,16 +924,20 @@ body {
         padding: 1rem;
     }
 
-    .kpi-row, .grid-2col, .grid-layout-2col {
+    .kpi-row,
+    .grid-2col,
+    .grid-layout-2col {
         grid-template-columns: 1fr;
         gap: 1rem;
     }
 
     .kpi-mini-grid {
-        grid-template-columns: 1fr 1fr; /* Keep 2 cols for mini stats */
+        grid-template-columns: 1fr 1fr;
+        /* Keep 2 cols for mini stats */
     }
-    
-    .chart-container, .chart-container-sm {
+
+    .chart-container,
+    .chart-container-sm {
         height: 200px;
     }
 
@@ -924,11 +945,13 @@ body {
     .incidents-layout {
         padding: 1rem;
     }
+
     .incidents-dashboard-grid {
         grid-template-columns: 1fr;
     }
-    
-    .incidents-table th, .incidents-table td {
+
+    .incidents-table th,
+    .incidents-table td {
         padding: 8px;
         font-size: 0.8rem;
     }
@@ -942,15 +965,52 @@ body {
 
 @media (max-width: 480px) {
     .nav-item span {
-        display: none; /* Icon only nav */
+        display: none;
+        /* Icon only nav */
     }
-    
+
     .quick-filters .label {
         display: none;
     }
-    
+
     .chip-toggle {
         padding: 4px 8px;
         font-size: 0.7rem;
+    }
+}
+
+@media print {
+    .report-section {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        margin-bottom: 2rem;
+        display: block;
+        /* Ensure block formatting context for breaks */
+    }
+
+    body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    button,
+    .no-print {
+        display: none !important;
+    }
+
+    /* Ensure charts have fixed height for printing */
+    .chart-container-sm {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    /* Fix for cut-off content */
+    html,
+    body,
+    .view-container,
+    .reports-layout,
+    .report-section {
+        height: auto !important;
+        overflow: visible !important;
     }
 }
