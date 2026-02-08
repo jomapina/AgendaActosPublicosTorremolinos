@@ -207,6 +207,13 @@ body {
     flex-direction: column;
 }
 
+.table-container {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
 .preview-header {
     margin-bottom: 1rem;
     font-weight: 600;
@@ -765,3 +772,185 @@ body {
 .danger-zone .kpi-card.warning { border-left: 4px solid var(--warning); }
 .danger-zone .kpi-card.danger { border-left: 4px solid var(--danger); }
 .caption { font-size: 0.7rem; color: var(--text-muted); }
+
+/* RESPONSIVE DESIGN */
+@media (max-width: 768px) {
+    /* 1. GENERAL & NAV */
+    .main-nav {
+        padding: 0 1rem;
+        height: auto;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+        padding-bottom: 8px;
+    }
+    
+    .nav-brand {
+        width: 100%;
+        justify-content: center;
+        margin-bottom: 4px;
+        font-size: 1.1rem;
+    }
+
+    .nav-links {
+        width: 100%;
+        justify-content: space-between;
+        overflow-x: auto;
+    }
+
+    .nav-item {
+        padding: 6px 10px;
+        font-size: 0.8rem;
+        flex-shrink: 0;
+    }
+
+    .nav-actions {
+        display: none; /* Hide refresh on mobile to save space, rely on pull or auto */
+    }
+
+    .view-container {
+        height: calc(100vh - 110px); /* Adjust for taller nav */
+    }
+
+    /* 2. FILTERS TAB */
+    .split-layout {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+
+    .filter-panel-full {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        max-height: 40vh; /* Limit height so results are visible */
+        flex-shrink: 0;
+    }
+
+    .filter-scroll-area {
+        grid-template-columns: 1fr; /* Single column filters */
+        padding: 1rem;
+        gap: 1rem;
+    }
+
+    .filter-scroll-area .form-group, 
+    .filter-scroll-area .form-group:nth-child(2),
+    .filter-scroll-area .form-group:last-child {
+        grid-column: span 1;
+    }
+
+    .filter-results-preview {
+        padding: 1rem;
+        overflow-y: visible; /* Let parent scroll */
+    }
+
+    /* 3. AGENDA TAB */
+    .agenda-quick-bar {
+        height: auto;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px 1rem;
+        justify-content: center;
+    }
+
+    .quick-filters {
+        width: 100%;
+        justify-content: center;
+        margin-bottom: 4px;
+    }
+    
+    .date-nav {
+        order: 2;
+        width: 100%;
+        justify-content: space-between;
+        display: flex;
+        margin-bottom: 4px;
+    }
+
+    #weekLabel {
+        font-size: 0.8rem;
+    }
+
+    .view-switcher-pill {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .view-switcher-pill .pill-btn {
+        flex: 1;
+        text-align: center;
+        padding: 6px;
+    }
+
+    .agenda-content-area {
+        height: calc(100% - 100px); /* Adjust for taller bar */
+    }
+
+    /* Week Grid Mobile */
+    .week-grid {
+        min-width: 600px; /* Force scroll */
+    }
+    
+    /* Month Grid Mobile */
+    .month-grid {
+       /* Allow default grid behavior but maybe smaller text */
+       font-size: 0.8rem;
+    }
+
+    /* List View Mobile */
+    .card {
+        padding: 1rem;
+    }
+
+    /* 4. REPORTS TAB */
+    .reports-layout {
+        padding: 1rem;
+    }
+
+    .kpi-row, .grid-2col, .grid-layout-2col {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .kpi-mini-grid {
+        grid-template-columns: 1fr 1fr; /* Keep 2 cols for mini stats */
+    }
+    
+    .chart-container, .chart-container-sm {
+        height: 200px;
+    }
+
+    /* 5. INCIDENTS TAB */
+    .incidents-layout {
+        padding: 1rem;
+    }
+    .incidents-dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .incidents-table th, .incidents-table td {
+        padding: 8px;
+        font-size: 0.8rem;
+    }
+
+    /* DRAWER */
+    .drawer {
+        width: 85%;
+        max-width: 350px;
+    }
+}
+
+@media (max-width: 480px) {
+    .nav-item span {
+        display: none; /* Icon only nav */
+    }
+    
+    .quick-filters .label {
+        display: none;
+    }
+    
+    .chip-toggle {
+        padding: 4px 8px;
+        font-size: 0.7rem;
+    }
+}
