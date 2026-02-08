@@ -11,6 +11,9 @@
     --success: #10b981;
 }
 
+/* Dark Mode Overrides */
+
+
 body {
     font-family: 'Inter', sans-serif;
     margin: 0;
@@ -55,6 +58,32 @@ body {
     cursor: pointer;
 }
 
+/* Homogenized small buttons (Limpiar, Arrows) */
+.btn-text-xs,
+.icon-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-size: 0.85rem;
+    /* Homogenized size */
+    font-family: inherit;
+    /* Homogenized font */
+    color: #333;
+    /* Dark gray */
+    padding: 4px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.btn-text-xs:hover,
+.icon-btn:hover {
+    background: #f1f5f9;
+    color: var(--primary);
+}
+
 .input-field {
     width: 100%;
     padding: 8px;
@@ -80,12 +109,13 @@ body {
 
 /* NAV */
 .main-nav {
-    height: 60px;
-    background: var(--bg-surface);
+    height: 70px;
+    background: #3fbbc0;
+    color: white;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
-    padding: 0 1.5rem;
+    padding: 0 2rem;
     justify-content: space-between;
 }
 
@@ -133,7 +163,11 @@ body {
 /* CONTAINERS */
 .view-container {
     display: none;
-    height: calc(100vh - 60px);
+    flex: 1;
+    /* Fill remaining space */
+    overflow: hidden;
+    /* Manage scroll internally */
+    width: 100%;
 }
 
 .view-container.active {
@@ -255,6 +289,29 @@ body {
     height: 100%;
 }
 
+.date-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* Optional spacing */
+}
+
+.app-footer {
+    height: 40px;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    /* Left/Right align */
+    padding: 0 2rem;
+    /* Match header padding */
+    font-size: 0.85rem;
+    color: #666666;
+    flex-shrink: 0;
+    z-index: 100;
+}
+
 .agenda-quick-bar {
     height: 50px;
     background: var(--bg-surface);
@@ -283,7 +340,12 @@ body {
     border: 1px solid transparent;
     padding: 4px 10px;
     border-radius: 99px;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
+    /* Homogenized size */
+    font-family: inherit;
+    /* Homogenized font */
+    color: #333;
+    /* Dark gray */
     cursor: pointer;
     transition: all 0.2s;
 }

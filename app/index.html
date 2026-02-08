@@ -44,10 +44,6 @@
                 </button>
             </div>
             <div class="nav-actions">
-                <div class="last-updated-badge" id="lastUpdated">...</div>
-                <button class="btn-icon" onclick="App.data.refresh()" title="Refrescar Datos">
-                    <i data-lucide="refresh-cw"></i>
-                </button>
             </div>
         </nav>
 
@@ -166,7 +162,6 @@
             <div class="agenda-layout">
                 <header class="agenda-quick-bar">
                     <div class="quick-filters">
-                        <span class="label">Rápidos:</span>
                         <!-- Quick Services -->
                         <div class="quick-toggles">
                             <button class="chip-toggle" onclick="App.agenda.toggleQuick('police')" id="chipPolice">👮
@@ -182,10 +177,12 @@
 
                     <!-- Date Nav -->
                     <div class="date-nav">
-                        <button class="icon-btn" onclick="App.agenda.prevWeek()">←</button>
+                        <button class="icon-btn" onclick="App.agenda.prevWeek()"><i
+                                data-lucide="chevron-left"></i></button>
                         <span id="weekLabel"
                             style="font-weight:600; font-size:0.9rem; min-width:140px; text-align:center"></span>
-                        <button class="icon-btn" onclick="App.agenda.nextWeek()">→</button>
+                        <button class="icon-btn" onclick="App.agenda.nextWeek()"><i
+                                data-lucide="chevron-right"></i></button>
                     </div>
 
                     <!-- View Switcher -->
@@ -447,7 +444,8 @@
 
         <!-- FOOTER -->
         <footer class="app-footer">
-            Delegación de Actos Públicos · Ayuntamiento de Torremolinos
+            <span>Delegación de Actos Públicos · Ayuntamiento de Torremolinos</span>
+            <span id="lastUpdated" style="font-size:0.85rem; opacity:0.8">Actualizado: ...</span>
         </footer>
     </div>
 

@@ -44,6 +44,7 @@ const App = {
             App.state.agenda.currentWeekStart = App.helpers.getStartOfWeek(new Date());
             App.ui.initDateInputs();
             App.data.refresh();
+
             if (window.lucide) lucide.createIcons();
 
             // Set initial active states for buttons if needed
@@ -872,12 +873,28 @@ const App = {
                     html += `<div onclick="App.ui.openDrawerId(${e.rawId})" 
                         style="position:absolute; top:${exactTop}px; height:${height}px; left:${left}%; width:${widthPct}%;
                         background:${col}44; border:1px solid ${col}; border-radius:3px; 
-                        padding:2px 4px; font-size:0.75rem; overflow:hidden; cursor:pointer; z-index:5; box-shadow:0 1px 2px rgba(0,0,0,0.1); display:flex; flex-direction:column;">
-                        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1px;">
+                        padding:2px 4px; font-size:0.75rem; overflow:hidden; cursor:pointer; z-index:5; box-shadow:0 1px 2px rgba(0,0,0,0.1); display:flex; flex-direction:column; gap:1px;">
+                        
+                        <!-- Header -->
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; line-height:1.1;">
                             <strong style="color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${e.title}</strong>
-                            ${duration >= 0.5 ? `<span style="font-size:0.8em; opacity:0.8; margin-left:4px;">${durStr}</span>` : ''}
                         </div>
-                        ${duration >= 1 ? `<div style="font-size:0.8em; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📍 ${e.place}</div>` : ''}
+                        
+                        <!-- Details (Compact) -->
+                        <div style="font-size:0.9em; color:#334155;">${durStr}</div>
+                        <div style="font-size:0.9em; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📍 ${e.place}</div>
+                        <div style="font-size:0.9em; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 ${e.organizer}</div>
+                        <div style="font-size:0.85em; color:#64748b; margin-top:1px;">${e.type} • ${e.publicType}</div>
+                        
+                        <!-- Extra Info -->
+                         <div style="font-size:0.85em; color:#64748b;">👥 ${e.capacity} | 🔑 ${e.access}</div>
+
+                        <!-- Services & Badges -->
+                        <div style="margin-top:auto; display:flex; justify-content:flex-end; gap:2px; font-size:0.9rem;">
+                             ${e.services.police ? '👮' : ''}
+                             ${e.services.stage ? '🎪' : ''}
+                             ${e.services.mega ? '🎤' : ''}
+                        </div>
                     </div>`;
                 });
                 html += '</div>';
@@ -906,21 +923,28 @@ const App = {
                 lbl.textContent = mStart.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).toUpperCase();
             }
 
-            // Grid Setup
-            let html = `<div style="display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); grid-auto-rows:minmax(120px, auto); gap:1px; background:#e2e8f0; border:1px solid #e2e8f0;">`;
+            // Grid Setup - Separate Header and Body to prevent header getting 120px height
+            const headerStyle = `display:grid; grid-template-columns:repeat(7, 1fr); gap:1px; background:#e2e8f0; border:1px solid #e2e8f0; border-bottom:none; position:sticky; top:0; z-index:20;`;
+            let headerHtml = `<div style="${headerStyle}">`;
 
             // Headers
-            const days = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-            days.forEach((day, i) => {
+            const days = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM']; // Slightly longer names for "bigger" feel? Or just L, M... User said "put it bigger". Length OK.
+            // Let's stick to L, M, X for consistency or expand if space permits. User liked Week View (3 letter).
+            const daysShort = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+            daysShort.forEach((day, i) => {
                 const border = i > 0 ? 'border-left:1px solid #cbd5e1;' : '';
-                // Matching Week View Style: 1.2rem, 600 weight.
-                // Reducing height to ~30px (padding 4px + font 20px).
-                html += `<div style="background:#e2e8f0; font-weight:600; text-align:center; padding:4px; font-size:1.2rem; color:#475569; ${border}; display:flex; align-items:center; justify-content:center; min-height:auto; line-height:1; position:sticky; top:0; z-index:10;">${day}</div>`;
+                // Fixed height 40px as requested "bigger"
+                headerHtml += `<div style="background:#e2e8f0; font-weight:600; text-align:center; padding:10px 4px; font-size:1rem; color:#475569; ${border}; display:flex; align-items:center; justify-content:center; height:40px; line-height:1;">${day}</div>`;
             });
+            headerHtml += `</div>`;
+
+            // Body Grid
+            let bodyHtml = `<div style="display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); grid-auto-rows:minmax(120px, auto); gap:1px; background:#e2e8f0; border:1px solid #e2e8f0; border-top:none;">`;
 
             // Empty slots
             let startDay = mStart.getDay() || 7;
-            for (let i = 1; i < startDay; i++) html += `<div style="background:#f8fafc;"></div>`;
+            for (let i = 1; i < startDay; i++) bodyHtml += `<div style="background:#f8fafc;"></div>`;
 
             for (let i = 1; i <= mEnd.getDate(); i++) {
                 const current = new Date(d.getFullYear(), d.getMonth(), i);
@@ -932,7 +956,7 @@ const App = {
                 const allDayEvts = dayEvts.filter(e => e.allDay);
                 const timedEvts = dayEvts.filter(e => !e.allDay).sort((a, b) => a.start - b.start);
 
-                html += `<div style="background:${bg}; padding:4px; min-height:100px; display:flex; flex-direction:column; gap:2px; position:relative;">
+                bodyHtml += `<div style="background:${bg}; padding:4px; min-height:100px; display:flex; flex-direction:column; gap:2px; position:relative;">
                     <!-- Date Number -->
                     <div style="text-align:right; font-weight:bold; color:${isToday ? 'white' : 'inherit'}; z-index:2;">
                         <span style="${isToday ? 'background:var(--primary); padding:2px 6px; border-radius:50%; font-size:0.8rem' : ''}">${i}</span>
@@ -948,37 +972,39 @@ const App = {
                         `).join('')}
                     </div>
 
-                    <!-- Timed Section (Rows) -->
+                    <!-- Timed Section -->
                     <div style="flex:1; display:flex; flex-direction:column; gap:1px;">
                         ${timedEvts.map(e => {
-                    const duration = (e.end - e.start) / 3600000; // hours
+                    const duration = (e.end - e.start) / 3600000;
                     const h = Math.floor(duration);
                     const m = Math.round((duration % 1) * 60);
                     const durStr = `${h}:${m.toString().padStart(2, '0')}h`;
 
-                    let heightClass = 'min-height:24px'; // default/short
+                    // Visual height hint
+                    let heightClass = 'min-height:24px';
                     if (duration >= 2) heightClass = 'min-height:45px';
                     if (duration >= 4) heightClass = 'min-height:70px';
 
                     return `
                             <div onclick="App.ui.openDrawerId(${e.rawId})" 
-                                 title="${e.title} (${durStr})"
-                                 style="cursor:pointer; font-size:0.75em; background:${App.state.delegationColors[e.delegation] || '#ccc'}44; color:#1e293b; 
-                                 border-radius:3px; border:1px solid ${App.state.delegationColors[e.delegation] || '#ccc'}; 
-                                 padding:2px 4px; overflow:hidden; display:flex; flex-direction:column; justify-content:start; ${heightClass}; margin-bottom:1px; flex: 0 0 auto;">
-                                 <div style="display:flex; justify-content:space-between; align-items:baseline">
-                                     <strong style="font-size:0.85em;">${e.start.getHours().toString().padStart(2, '0')}:${e.start.getMinutes().toString().padStart(2, '0')}</strong>
-                                     ${duration >= 2 ? `<span style="opacity:0.6; font-size:0.8em">${durStr}</span>` : ''}
-                                 </div>
-                                 <span style="line-height:1.1; font-weight:500; display:-webkit-box; -webkit-line-clamp:${duration >= 4 ? 4 : duration >= 2 ? 2 : 1}; -webkit-box-orient:vertical; overflow:hidden;">${e.title}</span>
-                                 ${duration >= 4 ? `<div style="margin-top:auto; font-size:0.8em; opacity:0.7">📍 ${e.place}</div>` : ''}
-                            </div>
-                        `}).join('')}
+                                title="${e.title} (${durStr})"
+                                style="cursor:pointer; font-size:0.75em; background:${App.state.delegationColors[e.delegation] || '#ccc'}44; color:#1e293b; 
+                                border-radius:3px; border:1px solid ${App.state.delegationColors[e.delegation] || '#ccc'}; 
+                                padding:2px 4px; overflow:hidden; display:flex; flex-direction:column; justify-content:start; ${heightClass}; margin-bottom:1px;">
+                                <div style="display:flex; justify-content:space-between; align-items:baseline">
+                                    <strong style="font-size:0.85em;">${e.start.getHours().toString().padStart(2, '0')}:${e.start.getMinutes().toString().padStart(2, '0')}</strong>
+                                    ${duration >= 2 ? `<span style="opacity:0.6; font-size:0.8em">${durStr}</span>` : ''}
+                                </div>
+                                <span style="line-height:1.1; font-weight:500; display:-webkit-box; -webkit-line-clamp:${duration >= 4 ? 4 : duration >= 2 ? 2 : 1}; -webkit-box-orient:vertical; overflow:hidden;">${e.title}</span>
+                                ${duration >= 4 ? `<div style="margin-top:auto; font-size:0.8em; opacity:0.7">📍 ${e.place}</div>` : ''}
+                            </div>`;
+                }).join('')}
                     </div>
-                 </div>`;
+                </div>`;
             }
-            html += '</div>';
-            grid.innerHTML = html;
+            bodyHtml += '</div>';
+
+            grid.innerHTML = headerHtml + bodyHtml;
         },
 
         renderList: (data) => {
@@ -993,15 +1019,15 @@ const App = {
             const sorted = [...data].sort((a, b) => a.start - b.start);
 
             c.innerHTML = sorted.map(e => {
-                const timeStr = e.allDay ? 'Todo el día' : `${e.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${e.end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                const timeStr = e.allDay ? 'Todo el día' : `${e.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${e.end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} `;
 
                 const durationMs = e.end - e.start;
                 const h = Math.floor(durationMs / 3600000);
                 const m = Math.round((durationMs % 3600000) / 60000);
-                const durationStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}h`;
+                const durationStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} h`;
 
                 return `
-                <div class="card" onclick='App.ui.openDrawerId(${e.rawId})' style="margin-bottom:8px; cursor:pointer; border-left:4px solid ${App.state.delegationColors[e.delegation] || '#ccc'}; padding:1rem;">
+    <div class="card" onclick="App.ui.openDrawerId(${e.rawId})" style="margin-bottom:8px; cursor:pointer; border-left:4px solid ${App.state.delegationColors[e.delegation] || '#ccc'}; padding:1rem;">
                     <!-- Header: Date, Time, Duration -->
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-size:0.85rem; color:#64748b;">
                         <div>
@@ -1051,7 +1077,7 @@ const App = {
             if (!d) return;
             const labels = { police: '👮 Policía', stage: '🎪 Escenario', mega: '🎤 Megafonía' };
             d.innerHTML = `
-                 <h2 style="margin-bottom:0.5rem">${e.title}</h2>
+    < h2 style = "margin-bottom:0.5rem" > ${e.title}</h2 >
                  <div style="display:flex; gap:8px; margin-bottom:1rem">
                     <span class="chip-toggle active">${e.type}</span>
                     <span class="chip-toggle" style="background:${App.state.delegationColors[e.delegation]}33; color:${App.state.delegationColors[e.delegation]}">${e.delegation}</span>
