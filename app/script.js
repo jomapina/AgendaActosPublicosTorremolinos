@@ -686,40 +686,7 @@ const App = {
             });
         },
 
-        exportPdf: () => {
-            // Strategy: Clone the element, remove constraints, export, then destroy.
-            const original = document.getElementById('tab-reports');
-            const clone = original.cloneNode(true);
 
-            // Setup clone styles to ensure full height capture
-            clone.style.width = '1200px'; // Fixed width for consistent scale
-            clone.style.height = 'auto';
-            clone.style.position = 'absolute';
-            clone.style.top = '-9999px'; // Hide off-screen but keep rendering
-            clone.style.left = '0';
-            clone.style.overflow = 'visible';
-            clone.style.background = 'white';
-            clone.classList.remove('view-container'); // Remove flex/scroll constraints if any
-
-            // Remove non-printable elements from clone
-            const buttons = clone.querySelectorAll('button, .no-print');
-            buttons.forEach(b => b.remove());
-
-            document.body.appendChild(clone);
-
-            const opt = {
-                margin: [0.3, 0.3, 0.3, 0.3], // top, left, bottom, right
-                filename: `Informe_Agenda_${new Date().toLocaleDateString().replace(/\//g, '-')}.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true, scrollY: 0, windowHeight: clone.scrollHeight },
-                jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' },
-                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-            };
-
-            html2pdf().set(opt).from(clone).save().then(() => {
-                document.body.removeChild(clone);
-            });
-        }
     },
 
     ui: {
