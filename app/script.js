@@ -863,7 +863,7 @@ const App = {
             }
 
             // Grid Setup
-            let html = `<div style="display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:minmax(120px, auto); gap:1px; background:#e2e8f0; border:1px solid #e2e8f0;">`;
+            let html = `<div style="display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); grid-auto-rows:minmax(120px, auto); gap:1px; background:#e2e8f0; border:1px solid #e2e8f0;">`;
 
             // Headers
             const days = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
