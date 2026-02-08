@@ -806,8 +806,8 @@ const App = {
 
             // Header (same as before) ...
             const header = document.createElement('div');
-            header.style.cssText = 'display:grid; grid-template-columns:50px repeat(7, 1fr); border-bottom:1px solid #e2e8f0; position:sticky; top:0; background:white; z-index:10;';
-            header.innerHTML = '<div></div>' + dates.map(d => `<div style="text-align:center; padding:8px; border-left:1px solid #f1f5f9; font-weight:600;"><div style="font-size:1.2rem; color:${App.helpers.isToday(d) ? 'var(--accent)' : 'inherit'}">${d.getDate()}</div><div style="font-size:0.75rem; color:#64748b; text-transform:uppercase;">${d.toLocaleDateString('es-ES', { weekday: 'short' })}</div></div>`).join('');
+            header.style.cssText = 'display:grid; grid-template-columns:50px repeat(7, 1fr); border-bottom:1px solid #e2e8f0; position:sticky; top:0; background:#e2e8f0; z-index:10;';
+            header.innerHTML = '<div></div>' + dates.map(d => `<div style="text-align:center; padding:8px; border-left:1px solid #cbd5e1; font-weight:600;"><div style="font-size:1.2rem; color:${App.helpers.isToday(d) ? 'var(--accent)' : 'inherit'}">${d.getDate()}</div><div style="font-size:0.75rem; color:#64748b; text-transform:uppercase;">${d.toLocaleDateString('es-ES', { weekday: 'short' })}</div></div>`).join('');
             grid.appendChild(header);
 
             // Body
@@ -839,7 +839,8 @@ const App = {
                 const totalLanes = lanes.length || 1;
                 const widthPct = 100 / totalLanes;
 
-                let html = `<div style="border-left:1px solid #f1f5f9; position:relative; background:white;">`;
+                const isToday = App.helpers.isToday(d);
+                let html = `<div style="border-left:1px solid #f1f5f9; position:relative; background:${isToday ? '#f1f5f9' : 'white'};">`;
 
                 // All Day Header within Column
                 if (allDayEvts.length > 0) {
@@ -863,11 +864,20 @@ const App = {
                     const col = App.state.delegationColors[e.delegation] || '#94a3b8';
                     const left = e.lane * widthPct;
 
+                    const duration = (e.end - e.start) / 3600000; // hours
+                    const h = Math.floor(duration);
+                    const m = Math.round((duration % 1) * 60);
+                    const durStr = `${h}:${m.toString().padStart(2, '0')}h`;
+
                     html += `<div onclick="App.ui.openDrawerId(${e.rawId})" 
                         style="position:absolute; top:${exactTop}px; height:${height}px; left:${left}%; width:${widthPct}%;
                         background:${col}44; border:1px solid ${col}; border-radius:3px; 
-                        padding:2px 4px; font-size:0.75rem; overflow:hidden; cursor:pointer; z-index:5; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
-                        <strong style="color:#1e293b">${e.title}</strong>
+                        padding:2px 4px; font-size:0.75rem; overflow:hidden; cursor:pointer; z-index:5; box-shadow:0 1px 2px rgba(0,0,0,0.1); display:flex; flex-direction:column;">
+                        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1px;">
+                            <strong style="color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${e.title}</strong>
+                            ${duration >= 0.5 ? `<span style="font-size:0.8em; opacity:0.8; margin-left:4px;">${durStr}</span>` : ''}
+                        </div>
+                        ${duration >= 1 ? `<div style="font-size:0.8em; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📍 ${e.place}</div>` : ''}
                     </div>`;
                 });
                 html += '</div>';
@@ -901,22 +911,28 @@ const App = {
 
             // Headers
             const days = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-            days.forEach(day => html += `<div style="background:#f8fafc; font-weight:bold; text-align:center; padding:4px; font-size:0.8rem; text-transform:uppercase; color:#64748b;">${day}</div>`);
+            days.forEach((day, i) => {
+                const border = i > 0 ? 'border-left:1px solid #cbd5e1;' : '';
+                // Matching Week View Style: 1.2rem, 600 weight.
+                // Reducing height to ~30px (padding 4px + font 20px).
+                html += `<div style="background:#e2e8f0; font-weight:600; text-align:center; padding:4px; font-size:1.2rem; color:#475569; ${border}; display:flex; align-items:center; justify-content:center; min-height:auto; line-height:1; position:sticky; top:0; z-index:10;">${day}</div>`;
+            });
 
             // Empty slots
             let startDay = mStart.getDay() || 7;
-            for (let i = 1; i < startDay; i++) html += `<div style="background:white;"></div>`;
+            for (let i = 1; i < startDay; i++) html += `<div style="background:#f8fafc;"></div>`;
 
             for (let i = 1; i <= mEnd.getDate(); i++) {
                 const current = new Date(d.getFullYear(), d.getMonth(), i);
                 const dayEvts = events.filter(e => App.helpers.isSameDay(e.start, current));
                 const isToday = App.helpers.isToday(current);
+                const bg = isToday ? '#f1f5f9' : 'white';
 
                 // Split events
                 const allDayEvts = dayEvts.filter(e => e.allDay);
                 const timedEvts = dayEvts.filter(e => !e.allDay).sort((a, b) => a.start - b.start);
 
-                html += `<div style="background:white; padding:4px; min-height:100px; display:flex; flex-direction:column; gap:2px; position:relative;">
+                html += `<div style="background:${bg}; padding:4px; min-height:100px; display:flex; flex-direction:column; gap:2px; position:relative;">
                     <!-- Date Number -->
                     <div style="text-align:right; font-weight:bold; color:${isToday ? 'white' : 'inherit'}; z-index:2;">
                         <span style="${isToday ? 'background:var(--primary); padding:2px 6px; border-radius:50%; font-size:0.8rem' : ''}">${i}</span>
@@ -977,21 +993,42 @@ const App = {
             const sorted = [...data].sort((a, b) => a.start - b.start);
 
             c.innerHTML = sorted.map(e => {
-                const time = e.allDay ? 'Todo el día' : `${e.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                const timeStr = e.allDay ? 'Todo el día' : `${e.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${e.end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+                const durationMs = e.end - e.start;
+                const h = Math.floor(durationMs / 3600000);
+                const m = Math.round((durationMs % 3600000) / 60000);
+                const durationStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}h`;
+
                 return `
-                <div class="card" onclick='App.ui.openDrawerId(${e.rawId})' style="margin-bottom:8px; cursor:pointer; border-left:4px solid ${App.state.delegationColors[e.delegation] || '#ccc'}; padding:0.75rem 1rem;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div class="card" onclick='App.ui.openDrawerId(${e.rawId})' style="margin-bottom:8px; cursor:pointer; border-left:4px solid ${App.state.delegationColors[e.delegation] || '#ccc'}; padding:1rem;">
+                    <!-- Header: Date, Time, Duration -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-size:0.85rem; color:#64748b;">
                         <div>
-                            <strong style="color:var(--primary)">${e.start.getDate()}</strong> <span style="font-size:0.8em; text-transform:uppercase">${e.start.toLocaleDateString('es-ES', { month: 'short' })}</span>
-                            <span style="margin:0 8px; color:#ccc">|</span>
-                            <span style="font-weight:600">${e.title}</span>
+                            <span style="font-weight:700; color:var(--primary); margin-right:8px;">${e.start.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase()}</span>
+                            <span>🕒 ${timeStr}</span>
+                            ${!e.allDay ? `<span style="background:#f1f5f9; padding:1px 6px; border-radius:4px; margin-left:8px; font-size:0.75em;">⏱️ ${durationStr}</span>` : ''}
                         </div>
-                        <span class="badge" style="font-size:0.8em">${time}</span>
+                        <span class="badge" style="background:${App.state.delegationColors[e.delegation] || '#eee'}44; color:${App.state.delegationColors[e.delegation] || '#666'}">${e.delegation}</span>
                     </div>
-                    <div style="margin-top:4px; font-size:0.85em; color:#64748b; display:flex; gap:12px;">
-                        <span>📍 ${e.place}</span>
-                        <span>👤 ${e.organizer}</span>
-                        <span>${Object.keys(e.services).filter(k => e.services[k]).map(k => k === 'police' ? '👮' : k === 'stage' ? '🎪' : '🎤').join(' ')}</span>
+
+                    <!-- Title -->
+                    <div style="font-size:1.1rem; font-weight:700; color:#1e293b; margin-bottom:8px;">${e.title}</div>
+
+                    <!-- Details Grid -->
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:8px; font-size:0.9rem; color:#475569;">
+                        <div>📍 <strong>Lugar:</strong> ${e.place}</div>
+                        <div>👤 <strong>Organiza:</strong> ${e.organizer}</div>
+                        <div>🏷️ <strong>Tipo:</strong> ${e.type} (${e.publicType})</div>
+                        <div>🔑 <strong>Acceso:</strong> ${e.access}</div>
+                        <div>👥 <strong>Aforo:</strong> ${e.capacity} | 🎟️ <strong>Estimado:</strong> ${e.participants}</div>
+                    </div>
+
+                    <!-- Footer: Services -->
+                    <div style="margin-top:8px; padding-top:8px; border-top:1px solid #f1f5f9; display:flex; gap:12px; font-size:1.1rem;">
+                        ${e.services.police ? '<span title="Policía">👮</span>' : ''}
+                        ${e.services.stage ? '<span title="Escenario">🎪</span>' : ''}
+                        ${e.services.mega ? '<span title="Megafonía">🎤</span>' : ''}
                     </div>
                 </div>`;
             }).join('');
