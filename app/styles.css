@@ -662,6 +662,41 @@ body {
     overflow-y: auto;
 }
 
+.drawer-title {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+    font-family: 'Inter', sans-serif;
+    /* Clean sans-serif */
+}
+
+.drawer-meta {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 1rem;
+}
+
+.drawer-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    font-size: 0.9rem;
+}
+
+.drawer-section-title {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.drawer-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 @keyframes slideIn {
     from {
         transform: translateX(100%);

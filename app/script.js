@@ -7,7 +7,32 @@ const csvUrl = isLocal
 const App = {
     config: {
         csvUrl: csvUrl,
-        colors: ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
+        delegationColors: {
+            'Educación': '#78C2AD', // Aguamarina Mate (Texto Negro)
+            'Eventos': '#5D8AA8',   // Azul Denim (Texto Blanco)
+            'Políticas Sociales': '#C38D9E', // Orquídea Mate (Texto Blanco)
+            'Deportes': '#E2725B',  // Terracota (Texto Blanco)
+            'Juventud': '#FFAB76',  // Salmón (Texto Blanco)
+            'Igualdad': '#A28089',  // Lavanda Ceniza (Texto Blanco)
+            'Cultura': '#87A96B',   // Verde Salvia (Texto Blanco)
+            'Mayores': '#F0E68C',   // Crema (Texto Negro)
+            'Protocolo': '#C2B280', // Arena (Texto Negro)
+            'Comercio': '#B2BEB5',  // Gris Perla (Texto Negro)
+            'Participación Ciudadana': '#F4C2C2', // Rosa Palo (Texto Negro)
+            'Medio Ambiente': '#679267', // Verde Musgo (Texto Blanco)
+            'General': '#e9ecef',   // Mantener Gris muy claro
+            'Vivero': '#e9ecef'     // Mantener Gris muy claro
+        },
+        textColors: {
+            'Educación': 'black',
+            'Juventud': 'black', // Updated per user request
+            'Mayores': 'black',
+            'Protocolo': 'black',
+            'Comercio': 'black',
+            'Participación Ciudadana': 'black',
+            'General': 'black',
+            'Vivero': 'black'
+        }
     },
 
     // STATE
@@ -98,9 +123,10 @@ const App = {
                 if (!dStr || !dStr.includes('/')) return;
 
                 const deleg = (row[0] || 'General').split(',')[0].trim();
+                const delegKey = App.config.delegationColors[deleg] ? deleg : 'Eventos';
+
                 if (!App.state.delegationColors[deleg]) {
-                    App.state.delegationColors[deleg] = App.config.colors[colorIdx % App.config.colors.length];
-                    colorIdx++;
+                    App.state.delegationColors[deleg] = App.config.delegationColors[delegKey];
                 }
 
                 const [start, end] = App.helpers.parseDates(dStr, row[11], row[10], row[12]);
@@ -139,7 +165,10 @@ const App = {
                         stage: App.helpers.checkBool(row[20]),
                         police: App.helpers.checkBool(row[21])
                     },
-                    hasConflict: false // reset check
+                    hasConflict: false, // reset check
+                    operationalDate: (start.getHours() < 6)
+                        ? new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1)
+                        : new Date(start.getFullYear(), start.getMonth(), start.getDate())
                 });
             });
 
@@ -196,8 +225,12 @@ const App = {
             s.globalFilteredEvents = s.allEvents.filter(e => {
                 const f = s.filters;
                 if (f.search && !e.title.toLowerCase().includes(f.search) && !e.place.toLowerCase().includes(f.search)) return false;
-                if (f.dateStart && e.end < f.dateStart) return false;
-                if (f.dateEnd && e.start > f.dateEnd) return false;
+
+                // Operational Date Filtering
+                const opDate = e.operationalDate;
+                // For date range, we check if the OPERATIONAL date falls within range
+                if (f.dateStart && opDate < f.dateStart) return false;
+                if (f.dateEnd && opDate > f.dateEnd) return false;
 
                 if (f.delegations.length && !f.delegations.includes(e.delegation)) return false;
                 if (f.types.length && !f.types.includes(e.type)) return false;
@@ -488,7 +521,7 @@ const App = {
             App.reports.renderChart('chartDelegationEvents', 'bar',
                 delegationData.map(d => d.name),
                 delegationData.map(d => d.count),
-                'Eventos', App.config.colors
+                'Eventos', delegationData.map(d => App.config.delegationColors[d.name] || App.config.delegationColors['General'])
             );
 
             // ==========================================
@@ -511,7 +544,7 @@ const App = {
             App.reports.renderChart('chartOrganizer', 'doughnut',
                 ['Ayuntamiento', 'Terceros'],
                 [aytoCount, thirdCount],
-                'Eventos', [App.config.colors[0], '#cbd5e1']
+                'Eventos', [App.config.delegationColors['Eventos'], '#cbd5e1']
             );
 
             // ==========================================
@@ -523,11 +556,12 @@ const App = {
             setTxt('kpiAvgAudience', eventsWithAudience ? Math.round(totalAudience / eventsWithAudience) : 0);
 
             // Charts
+            const palette = Object.values(App.config.delegationColors);
             const byType = groupBy(evts, 'publicType');
-            App.reports.renderChart('chartPublicType', 'pie', Object.keys(byType), Object.values(byType).map(v => v.length), 'Público', App.config.colors);
+            App.reports.renderChart('chartPublicType', 'pie', Object.keys(byType), Object.values(byType).map(v => v.length), 'Público', palette);
 
             const byAccess = groupBy(evts, 'access');
-            App.reports.renderChart('chartAccessType', 'pie', Object.keys(byAccess), Object.values(byAccess).map(v => v.length), 'Acceso', App.config.colors);
+            App.reports.renderChart('chartAccessType', 'pie', Object.keys(byAccess), Object.values(byAccess).map(v => v.length), 'Acceso', palette);
 
 
             // ==========================================
@@ -767,12 +801,18 @@ const App = {
             const start = App.state.agenda.currentWeekStart;
             if (!start) return;
             const dates = Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
-            const end = new Date(start); end.setDate(start.getDate() + 7);
-            const events = data.filter(e => e.start < end && e.end > start);
+            const end = new Date(start); end.setDate(start.getDate() + 7); // Physical end date for query, but logic uses operational
+
+            // Filter by logic: events whose operationalDate falls within this week
+            const events = data.filter(e => {
+                const opDate = e.operationalDate;
+                return opDate >= start && opDate < end;
+            });
+
             const grid = document.getElementById('weekGrid');
             if (!grid) return; grid.innerHTML = '';
 
-            // Header (same as before) ...
+            // Header
             const header = document.createElement('div');
             header.style.cssText = 'display:grid; grid-template-columns:50px repeat(7, 1fr); border-bottom:1px solid #e2e8f0; position:sticky; top:0; background:#e2e8f0; z-index:10;';
             header.innerHTML = '<div></div>' + dates.map(d => `<div style="text-align:center; padding:8px; border-left:1px solid #cbd5e1; font-weight:600;"><div style="font-size:1.2rem; color:${App.helpers.isToday(d) ? 'var(--accent)' : 'inherit'}">${d.getDate()}</div><div style="font-size:0.75rem; color:#64748b; text-transform:uppercase;">${d.toLocaleDateString('es-ES', { weekday: 'short' })}</div></div>`).join('');
@@ -780,22 +820,21 @@ const App = {
 
             // Body
             const body = document.createElement('div');
-            body.style.cssText = 'display:grid; grid-template-columns:50px repeat(7, 1fr); position:relative; min-height:800px;';
+            body.style.cssText = 'display:grid; grid-template-columns:50px repeat(7, 1fr); position:relative; min-height:1440px;'; // 24h * 60px
 
-            // Time Column
-            let timeHtml = '<div style="background:#f8fafc;">' + Array.from({ length: 16 }, (_, i) => i + 8).map(h => `<div style="height:60px; border-bottom:1px solid #e2e8f0; text-align:right; padding-right:8px; font-size:0.75rem; color:#64748b; transform:translateY(-10px)">${h}:00</div>`).join('') + '</div>';
+            // Time Column (06:00 to 05:00 next day)
+            const hoursSequence = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5];
+            let timeHtml = '<div style="background:#f8fafc;">' + hoursSequence.map(h => `<div style="height:60px; border-bottom:1px solid #e2e8f0; text-align:right; padding-right:8px; font-size:0.75rem; color:#64748b; transform:translateY(-10px)">${h}:00</div>`).join('') + '</div>';
 
             // Days
             const colHtml = dates.map(d => {
-                let dayEvts = events.filter(e => App.helpers.isSameDay(e.start, d) && !e.allDay);
-                let allDayEvts = events.filter(e => App.helpers.isSameDay(e.start, d) && e.allDay);
+                let dayEvts = events.filter(e => App.helpers.isSameDay(e.operationalDate, d) && !e.allDay);
+                let allDayEvts = events.filter(e => App.helpers.isSameDay(e.operationalDate, d) && e.allDay);
 
-                // Simple overlap detection for Week View:
-                // Sort by start
+                // Sort by actual start time
                 dayEvts.sort((a, b) => a.start - b.start);
-                // Assign columns? For now, if simple, just overlap slightly or use width.
-                // User requirement: "si hay 2, dos columnas".
-                // Simple greedy:
+
+                // Lane Logic
                 const lanes = [];
                 dayEvts.forEach(e => {
                     let placed = false;
@@ -807,24 +846,28 @@ const App = {
                 const totalLanes = lanes.length || 1;
                 const widthPct = 100 / totalLanes;
 
-                const isToday = App.helpers.isToday(d);
+                const isToday = App.helpers.isToday(d); // This checks calendar date. Might be slightly off for late night viewing, but acceptable.
                 let html = `<div style="border-left:1px solid #f1f5f9; position:relative; background:${isToday ? '#f1f5f9' : 'white'};">`;
 
-                // All Day Header within Column
+                // All Day Header
                 if (allDayEvts.length > 0) {
                     html += `<div style="background:#f1f5f9; border-bottom:1px solid #ccc; padding:2px;">
                         ${allDayEvts.map(e => `<div onclick="App.ui.openDrawerId(${e.rawId})" style="cursor:pointer; font-size:0.7em; margin-bottom:1px; background:white; padding:1px; border-left:3px solid ${App.state.delegationColors[e.delegation]}">${e.title}</div>`).join('')}
                      </div>`;
                 }
 
-                // Grid lines
-                for (let h = 8; h <= 23; h++) html += `<div style="height:60px; border-bottom:1px dashed #f1f5f9;"></div>`;
+                // Grid lines (24 slots)
+                for (let i = 0; i < 24; i++) html += `<div style="height:60px; border-bottom:1px dashed #f1f5f9;"></div>`;
 
                 dayEvts.forEach(e => {
-                    if (e.start.getHours() < 8) return;
-                    const top = (e.start.getHours() - 8) * 60 + e.start.getMinutes() + (allDayEvts.length > 0 ? 20 : 0); // Offset if all day? slightly complex. CSS Grid better but absolute ok.
-                    // Actually, let's ignore offset for absolute time positioning.
-                    const exactTop = (e.start.getHours() - 8) * 60 + e.start.getMinutes();
+                    const h = e.start.getHours();
+                    const m = e.start.getMinutes();
+
+                    // Calculate visual offset from 06:00
+                    // If h >= 6 (06:00 - 23:59) -> offset = h - 6
+                    // If h < 6 (00:00 - 05:59) -> offset = h + 18
+                    const hourOffset = (h >= 6) ? (h - 6) : (h + 18);
+                    const exactTop = (hourOffset * 60) + m;
 
                     let height = (e.end - e.start) / 60000;
                     if (height < 25) height = 25;
@@ -832,36 +875,25 @@ const App = {
                     const col = App.state.delegationColors[e.delegation] || '#94a3b8';
                     const left = e.lane * widthPct;
 
-                    const duration = (e.end - e.start) / 3600000; // hours
-                    const h = Math.floor(duration);
-                    const m = Math.round((duration % 1) * 60);
-                    const durStr = `${h}:${m.toString().padStart(2, '0')}h`;
+                    const duration = (e.end - e.start) / 3600000;
+                    const durH = Math.floor(duration);
+                    const durM = Math.round((duration % 1) * 60);
+                    const durStr = `${durH}:${durM.toString().padStart(2, '0')}h`;
+
+                    // Check if event text color override exists
+                    const textCol = App.config.textColors[e.delegation] || 'white';
 
                     html += `<div onclick="App.ui.openDrawerId(${e.rawId})" 
                         style="position:absolute; top:${exactTop}px; height:${height}px; left:${left}%; width:${widthPct}%;
-                        background:${col}44; border:1px solid ${col}; border-radius:3px; 
+                        background:${col}; border:1px solid white; border-radius:3px; 
                         padding:2px 4px; font-size:0.75rem; overflow:hidden; cursor:pointer; z-index:5; box-shadow:0 1px 2px rgba(0,0,0,0.1); display:flex; flex-direction:column; gap:1px;">
                         
-                        <!-- Header -->
                         <div style="display:flex; justify-content:space-between; align-items:flex-start; line-height:1.1;">
-                            <strong style="color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${e.title}</strong>
+                            <strong style="color:${textCol}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${e.title}</strong>
                         </div>
                         
-                        <!-- Details (Compact) -->
-                        <div style="font-size:0.9em; color:#334155;">${durStr}</div>
-                        <div style="font-size:0.9em; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📍 ${e.place}</div>
-                        <div style="font-size:0.9em; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">👤 ${e.organizer}</div>
-                        <div style="font-size:0.85em; color:#64748b; margin-top:1px;">${e.type} • ${e.publicType}</div>
-                        
-                        <!-- Extra Info -->
-                         <div style="font-size:0.85em; color:#64748b;">👥 ${e.capacity} | 🔑 ${e.access}</div>
-
-                        <!-- Services & Badges -->
-                        <div style="margin-top:auto; display:flex; justify-content:flex-end; gap:2px; font-size:0.9rem;">
-                             ${e.services.police ? '👮' : ''}
-                             ${e.services.stage ? '🎪' : ''}
-                             ${e.services.mega ? '🎤' : ''}
-                        </div>
+                        <div style="font-size:0.9em; color:${textCol}; opacity:0.9;">${durStr}</div>
+                        <div style="font-size:0.9em; color:${textCol}; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📍 ${e.place}</div>
                     </div>`;
                 });
                 html += '</div>';
@@ -915,7 +947,7 @@ const App = {
 
             for (let i = 1; i <= mEnd.getDate(); i++) {
                 const current = new Date(d.getFullYear(), d.getMonth(), i);
-                const dayEvts = events.filter(e => App.helpers.isSameDay(e.start, current));
+                const dayEvts = events.filter(e => App.helpers.isSameDay(e.operationalDate, current));
                 const isToday = App.helpers.isToday(current);
                 const bg = isToday ? '#f1f5f9' : 'white';
 
@@ -955,15 +987,15 @@ const App = {
                     return `
                             <div onclick="App.ui.openDrawerId(${e.rawId})" 
                                 title="${e.title} (${durStr})"
-                                style="cursor:pointer; font-size:0.75em; background:${App.state.delegationColors[e.delegation] || '#ccc'}44; color:#1e293b; 
-                                border-radius:3px; border:1px solid ${App.state.delegationColors[e.delegation] || '#ccc'}; 
+                                style="cursor:pointer; font-size:0.75em; background:${App.state.delegationColors[e.delegation] || '#ccc'}; color:${App.config.textColors[e.delegation] || 'white'}; 
+                                border-radius:3px; border:1px solid white; 
                                 padding:2px 4px; overflow:hidden; display:flex; flex-direction:column; justify-content:start; ${heightClass}; margin-bottom:1px;">
                                 <div style="display:flex; justify-content:space-between; align-items:baseline">
                                     <strong style="font-size:0.85em;">${e.start.getHours().toString().padStart(2, '0')}:${e.start.getMinutes().toString().padStart(2, '0')}</strong>
-                                    ${duration >= 2 ? `<span style="opacity:0.6; font-size:0.8em">${durStr}</span>` : ''}
+                                    ${duration >= 2 ? `<span style="opacity:0.8; font-size:0.8em">${durStr}</span>` : ''}
                                 </div>
                                 <span style="line-height:1.1; font-weight:500; display:-webkit-box; -webkit-line-clamp:${duration >= 4 ? 4 : duration >= 2 ? 2 : 1}; -webkit-box-orient:vertical; overflow:hidden;">${e.title}</span>
-                                ${duration >= 4 ? `<div style="margin-top:auto; font-size:0.8em; opacity:0.7">📍 ${e.place}</div>` : ''}
+                                ${duration >= 4 ? `<div style="margin-top:auto; font-size:0.8em; opacity:0.9">📍 ${e.place}</div>` : ''}
                             </div>`;
                 }).join('')}
                     </div>
@@ -1043,13 +1075,14 @@ const App = {
             const d = document.getElementById('drawerContent');
             if (!d) return;
             const labels = { police: '👮 Policía', stage: '🎪 Escenario', mega: '🎤 Megafonía' };
+            const titleColor = App.config.delegationColors[e.delegation] || '#1e293b';
             d.innerHTML = `
-    < h2 style = "margin-bottom:0.5rem" > ${e.title}</h2 >
-                 <div style="display:flex; gap:8px; margin-bottom:1rem">
+                 <h2 class="drawer-title" style="color:${titleColor}">${e.title}</h2>
+                 <div class="drawer-meta">
                     <span class="chip-toggle active">${e.type}</span>
                     <span class="chip-toggle" style="background:${App.state.delegationColors[e.delegation]}33; color:${App.state.delegationColors[e.delegation]}">${e.delegation}</span>
                  </div>
-                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; font-size:0.9rem">
+                 <div class="drawer-grid">
                      <div>
                         <p class="text-muted">Lugar</p>
                         <p>📍 ${e.place}</p>
@@ -1068,8 +1101,8 @@ const App = {
                      </div>
                  </div>
                  <hr style="margin:1rem 0; border-top:1px solid #eee">
-                 <h3 style="font-size:1rem; margin-bottom:0.5rem">Requerimientos</h3>
-                 <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                 <h3 class="drawer-section-title">Requerimientos</h3>
+                 <div class="drawer-tags">
                      ${Object.keys(e.services).filter(k => e.services[k]).map(k => `<span class="chip-toggle active">${labels[k] || k}</span>`).join('')}
                      ${e.contracts ? '<span class="chip-toggle active">Contratos</span>' : ''}
                  </div>
