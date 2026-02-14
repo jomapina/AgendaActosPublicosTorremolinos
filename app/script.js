@@ -147,7 +147,7 @@ const App = {
             };
 
             console.log("Saving to Sheets...", payload);
-            alert(`Guardando cambios para ID: ${evt.uniqueId}...`); // Debug Feedback
+            // alert(`Guardando cambios para ID: ${evt.uniqueId}...`); // Debug Feedback Disabled
 
             // Fire and forget (using text/plain to avoid CORS Preflight)
             fetch(SCRIPT_URL, {
@@ -726,8 +726,8 @@ const App = {
                 if (App.state.agenda.viewMode === 'month') App.ui.renderMonth(App.agenda.applyLocalFilters(App.state.globalFilteredEvents));
                 if (App.state.activeTab === 'planning') App.planning.render();
 
-                // Sync to Google Sheets
-                App.data.saveToSheets(eventId);
+                // Sync to Google Sheets (Already called at line 723)
+                // App.data.saveToSheets(eventId); // REMOVED DUPLICATE
 
             } else {
                 if (code !== null) alert("Código incorrecto.");
