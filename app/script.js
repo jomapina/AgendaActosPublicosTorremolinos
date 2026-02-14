@@ -106,29 +106,35 @@ const App = {
             const bust = `&t=${Date.now()}`;
             const target = url + bust;
 
-            for (const proxy of PROXIES) {
-                try {
-                    const finalUrl = proxy + encodeURIComponent(target);
-                    console.log(`Trying Proxy: ${proxy}`);
-                    const response = await fetch(finalUrl);
-                    if (!response.ok) throw new Error(`Status ${response.status}`);
+            // Helper to fetch and validate single proxy
+            const tryProxy = async (proxyUrl) => {
+                const finalUrl = proxyUrl + encodeURIComponent(target);
+                // console.log(`Racing Proxy: ${proxyUrl}`); 
+                const response = await fetch(finalUrl, { signal: AbortSignal.timeout(10000) }); // 10s timeout
+                if (!response.ok) throw new Error(`Status ${response.status}`);
+                const text = await response.text();
 
-                    const text = await response.text();
+                // Content Validation
+                if (!text) throw new Error("Empty response");
+                if (text.trim().startsWith('<')) throw new Error("HTML Error Page");
+                if (text.length < 100) throw new Error("Too short");
 
-                    // VALIDATION: content must look like CSV
-                    if (!text) throw new Error("Empty response");
-                    if (text.trim().startsWith('<')) throw new Error("Response is HTML (Proxy Error Page)");
-                    if (text.length < 100) throw new Error("Response too short to be valid CSV");
+                return text;
+            };
 
-                    return text;
-                } catch (e) {
-                    console.warn(`Proxy ${proxy} failed:`, e);
-                }
+            // 1. Race all proxies in parallel (First valid win)
+            try {
+                console.log("Starting parallel proxy race...");
+                const winner = await Promise.any(PROXIES.map(p => tryProxy(p)));
+                console.log("Race won by a proxy!");
+                return winner;
+            } catch (aggregateError) {
+                console.warn("All proxies failed:", aggregateError);
             }
 
             // 2. Hail Mary: Try Direct Google Fetch (Might work in some browsers/extensions)
             try {
-                console.warn("All proxies failed. Trying direct Google fetch...");
+                console.warn("Trying direct Google fetch...");
                 const response = await fetch(target);
                 if (!response.ok) throw new Error(`Status ${response.status}`);
                 return await response.text();
@@ -178,8 +184,9 @@ const App = {
             const cp = JSON.parse(localStorage.getItem('agenda_checkpoints') || '{}')[id] || {};
             const prod = JSON.parse(localStorage.getItem('agenda_production') || '{}')[id] || '';
 
+
             const payload = {
-                action: 'update', // Maintain for potential future routing, though script doesn't use it yet
+                action: 'update',
                 id: evt.uniqueId,
                 fase0: !!cp.p0,
                 fase1: !!cp.p1,
@@ -188,27 +195,15 @@ const App = {
                 produccion: prod
             };
 
-            console.log("Saving to Sheets...", payload);
-            // alert(`Guardando cambios para ID: ${evt.uniqueId}...`); // Debug Feedback Disabled
-
-            // Convert to Form Data (x-www-form-urlencoded) for GAS compatibility
-            const formData = new URLSearchParams();
-            formData.append('action', 'update');
-            formData.append('id', evt.uniqueId);
-            formData.append('fase0', !!cp.p0);
-            formData.append('fase1', !!cp.p1);
-            formData.append('fase2', !!cp.p2);
-            formData.append('fase3', !!cp.p3);
-            formData.append('produccion', prod);
-
-            // Fire and forget (using mode: 'no-cors' requires opaque response)
+            // Fire and forget (using text/plain to avoid CORS Preflight)
+            // Script uses JSON.parse(e.postData.contents), so we MUST send JSON.
             fetch(SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formData
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
             }).then(() => {
-                console.log("Save request sent (Opaque/No-CORS). Assuming success.");
+                console.log("Save request sent (JSON/No-CORS). Assuming success.");
             }).catch(e => {
                 console.error("Sheet Connection Error:", e);
                 // Keep error alert but less intrusive
