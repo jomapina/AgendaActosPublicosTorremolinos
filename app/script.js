@@ -195,21 +195,21 @@ const App = {
                 produccion: prod
             };
 
-            // Fire and forget (using text/plain to avoid CORS Preflight)
-            // Script uses JSON.parse(e.postData.contents), so we MUST send JSON.
+            console.log("Saving UUID:", evt.uniqueId);
+
+            const jsonPayload = JSON.stringify(payload);
+
+            // Simple Fetch (Reverted to basic "fire and forget")
             fetch(SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
-                cache: 'no-cache', // Ensure no caching
-                credentials: 'omit', // Don't send cookies (avoid 3rd party blocks)
-                keepalive: true, // Ensure request survives page unload
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(payload)
+                body: jsonPayload
             }).then(() => {
-                console.log("Save request sent (JSON/No-CORS/Omit). Assuming success.");
+                console.log("Save sent via Basic Fetch.");
             }).catch(e => {
                 console.error("Sheet Connection Error:", e);
-                // Keep error alert but less intrusive
+                alert("Error de conexión al guardar.");
             });
         },
 
@@ -238,16 +238,33 @@ const App = {
                     App.state.delegationColors[deleg] = App.config.delegationColors[delegKey];
                 }
 
-                // --- SYNC READ LOGIC ---
-                // Map CSV Columns Y(24), Z(25), AA(26), AB(27), AC(28) to State
-                const isTrue = (v) => String(v).toUpperCase() === 'TRUE';
-                const p0 = isTrue(row[24]);
-                const p1 = isTrue(row[25]);
-                const p2 = isTrue(row[26]);
-                const p3 = isTrue(row[27]);
-                let prod = (row[28] || '').trim();
-                // Default handling for Production
-                if (prod === '') prod = 'Sin asignar';
+                // --- SYNC READ LOGIC (SMART MERGE) ---
+                const lastMod = JSON.parse(localStorage.getItem('agenda_last_modified') || '{}')[idx] || 0;
+                const isRecent = (Date.now() - lastMod) < 300000; // 5 minutes
+
+                // Chekpoints
+                let p0, p1, p2, p3;
+                if (isRecent) {
+                    // Keep Local (User recently changed it)
+                    const localCp = JSON.parse(localStorage.getItem('agenda_checkpoints') || '{}')[idx] || {};
+                    p0 = !!localCp.p0; p1 = !!localCp.p1; p2 = !!localCp.p2; p3 = !!localCp.p3;
+                } else {
+                    // Use CSV (Server Authority)
+                    const isTrue = (v) => String(v).toUpperCase() === 'TRUE';
+                    p0 = isTrue(row[24]);
+                    p1 = isTrue(row[25]);
+                    p2 = isTrue(row[26]);
+                    p3 = isTrue(row[27]);
+                }
+
+                // Production
+                let prod;
+                if (isRecent) {
+                    prod = JSON.parse(localStorage.getItem('agenda_production') || '{}')[idx] || '';
+                } else {
+                    prod = (row[28] || '').trim();
+                }
+                if (!prod) prod = 'Sin asignar';
 
                 // Populate Sync Objects (Key: RawId/Index)
                 syncCheckpoints[idx] = { p0, p1, p2, p3 };
@@ -773,6 +790,11 @@ const App = {
             data[eventId][phaseKey] = !currentState;
             localStorage.setItem('agenda_checkpoints', JSON.stringify(data));
 
+            // Track modification time for Smart Merge
+            const lastMod = JSON.parse(localStorage.getItem('agenda_last_modified') || '{}');
+            lastMod[eventId] = Date.now();
+            localStorage.setItem('agenda_last_modified', JSON.stringify(lastMod));
+
             // Sync to Google Sheets check
             try {
                 App.data.saveToSheets(eventId);
@@ -793,6 +815,11 @@ const App = {
                 const data = JSON.parse(localStorage.getItem('agenda_production') || '{}');
                 data[eventId] = val;
                 localStorage.setItem('agenda_production', JSON.stringify(data));
+
+                // Track modification time for Smart Merge
+                const lastMod = JSON.parse(localStorage.getItem('agenda_last_modified') || '{}');
+                lastMod[eventId] = Date.now();
+                localStorage.setItem('agenda_last_modified', JSON.stringify(lastMod));
 
                 // Sync to Google Sheets
                 try { App.data.saveToSheets(eventId); } catch (e) { console.error(e); }
