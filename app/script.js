@@ -1,14 +1,13 @@
 // --- NAMESPACE & CONFIG ---
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwKqKdyjgRwMc5w4PdYmIcoAnrbqZvLtL6r5Sn9iCsKXoNm_QHwbXNPfa9F7Epfc9gmKw/exec"; // Integrated
 // Force Proxy URL for both Local and Prod to ensure fresh data (Cache busting added in App.init)
-const CSV_BASE = 'https://corsproxy.io/?' + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSU9NpgyN3RgNiPntHNLMDVmZNdfdop55kuW1ZLZQ8YqVGjawosab7uhZsaFuUcxdk_VOZ9NBd_qpiZ/pub?output=csv');
+const PROXY_BASE = 'https://corsproxy.io/?';
+const GOOGLE_CSV_RAW = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSU9NpgyN3RgNiPntHNLMDVmZNdfdop55kuW1ZLZQ8YqVGjawosab7uhZsaFuUcxdk_VOZ9NBd_qpiZ/pub?output=csv';
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
-// const csvUrl = isLocal ? CSV_BASE : '/api/data'; // OLD LOGIC
-const csvUrl = CSV_BASE; // NEW LOGIC: Always use direct sheet for now to fix sync issues
 
 const App = {
     config: {
-        csvUrl: csvUrl,
+        // csvUrl: csvUrl, // Removed in favor of dynamic construction
         delegationColors: {
             'Educación': '#78C2AD', // Aguamarina Mate (Texto Negro)
             'Eventos': '#5D8AA8',   // Azul Denim (Texto Blanco)
@@ -104,11 +103,13 @@ const App = {
             if (el) el.textContent = 'Cargando...';
 
             // Add timestamp to prevent caching (Cloud Sync Fix)
-            const sep = App.config.csvUrl.includes('?') ? '&' : '?';
-            const bust = `t=${Date.now()}`;
-            console.log("Fetching CSV from:", App.config.csvUrl + sep + bust);
+            const bust = `&t=${Date.now()}`;
+            const targetUrl = GOOGLE_CSV_RAW + bust;
+            const finalUrl = PROXY_BASE + encodeURIComponent(targetUrl);
 
-            Papa.parse(App.config.csvUrl + sep + bust, {
+            console.log("Fetching CSV from:", finalUrl);
+
+            Papa.parse(finalUrl, {
                 download: true, header: false,
                 complete: (results) => {
                     App.data.process(results.data);
