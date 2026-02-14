@@ -3,8 +3,9 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwKqKdyjgRwMc5w4PdYm
 // Force Proxy URL for both Local and Prod to ensure fresh data (Cache busting added in App.init)
 const GOOGLE_CSV_RAW = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSU9NpgyN3RgNiPntHNLMDVmZNdfdop55kuW1ZLZQ8YqVGjawosab7uhZsaFuUcxdk_VOZ9NBd_qpiZ/pub?output=csv';
 const PROXIES = [
-    'https://corsproxy.io/?', // Primary
-    'https://api.allorigins.win/raw?url=' // Fallback
+    'https://api.allorigins.win/raw?url=', // Primary (Most robust)
+    'https://thingproxy.freeboard.io/fetch/', // Backup 1
+    'https://corsproxy.io/?' // Backup 2
 ];
 
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
@@ -116,7 +117,18 @@ const App = {
                     console.warn(`Proxy ${proxy} failed:`, e);
                 }
             }
-            throw new Error("All proxies failed.");
+
+            // 2. Hail Mary: Try Direct Google Fetch (Might work in some browsers/extensions)
+            try {
+                console.warn("All proxies failed. Trying direct Google fetch...");
+                const response = await fetch(target);
+                if (!response.ok) throw new Error(`Status ${response.status}`);
+                return await response.text();
+            } catch (e) {
+                console.error("Direct fetch failed:", e);
+            }
+
+            throw new Error("Critical: Unable to load data from any source.");
         },
 
         refresh: () => {
