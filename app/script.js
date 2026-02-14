@@ -1,7 +1,7 @@
 // --- NAMESPACE & CONFIG ---
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwKqKdyjgRwMc5w4PdYmIcoAnrbqZvLtL6r5Sn9iCsKXoNm_QHwbXNPfa9F7Epfc9gmKw/exec"; // Integrated
 // Force Proxy URL for both Local and Prod to ensure fresh data (Cache busting added in App.init)
-const PROXY_BASE = 'https://corsproxy.io/?';
+const PROXY_BASE = 'https://api.allorigins.win/raw?url=';
 const GOOGLE_CSV_RAW = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSU9NpgyN3RgNiPntHNLMDVmZNdfdop55kuW1ZLZQ8YqVGjawosab7uhZsaFuUcxdk_VOZ9NBd_qpiZ/pub?output=csv';
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
 
