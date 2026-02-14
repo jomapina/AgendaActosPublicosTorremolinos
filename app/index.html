@@ -36,11 +36,14 @@
                 <button class="nav-item active" onclick="App.router.navigate('agenda')">
                     <i data-lucide="calendar"></i> Agenda
                 </button>
+                <button class="nav-item" onclick="App.router.navigate('incidents')">
+                    <i data-lucide="alert-triangle"></i> Incidencias
+                </button>
                 <button class="nav-item" onclick="App.router.navigate('reports')">
                     <i data-lucide="bar-chart-3"></i> Informes
                 </button>
-                <button class="nav-item" onclick="App.router.navigate('incidents')">
-                    <i data-lucide="alert-triangle"></i> Incidencias
+                <button class="nav-item" onclick="App.router.navigate('planning')">
+                    <i data-lucide="kanban-square"></i> Planificación
                 </button>
             </div>
             <div class="nav-actions">
@@ -208,6 +211,75 @@
                     <!-- List View -->
                     <div id="view-list" class="sub-view">
                         <div class="list-container" id="listContainer"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- TAB 2.5: PLANNING -->
+        <main id="tab-planning" class="view-container">
+            <div class="agenda-layout">
+                <header class="agenda-quick-bar">
+                    <div class="quick-filters" style="gap:1rem; align-items:center;">
+                        <span style="font-weight:600; color:var(--primary)">Cronograma</span>
+                        <details style="position:relative;">
+                            <summary
+                                style="cursor:pointer; font-weight:600; font-size:0.8rem; color:#64748b; list-style:none;">
+                                ⚙️ Configurar Plazos</summary>
+                            <div
+                                style="position:absolute; top:20px; left:0; background:white; padding:1rem; border:1px solid #ccc; border-radius:4px; z-index:50; box-shadow:0 10px 15px -3px rgba(0,0,0,0.1); display:grid; gap:0.5rem; width:220px;">
+                                <div
+                                    style="font-weight:bold; margin-bottom:0.5rem; border-bottom:1px solid #eee; padding-bottom:0.25rem">
+                                    Semanas de Antelación</div>
+                                <label style="font-size:0.8rem; display:flex; justify-content:space-between;">Semanas
+                                    Fase 0: <input type="number" id="cfgP0" value="28" style="width:50px; padding:2px"
+                                        onchange="App.planning.updateConfig()"></label>
+                                <label style="font-size:0.8rem; display:flex; justify-content:space-between;">Semanas
+                                    Fase 1: <input type="number" id="cfgP1" value="24" style="width:50px; padding:2px"
+                                        onchange="App.planning.updateConfig()"></label>
+                                <label style="font-size:0.8rem; display:flex; justify-content:space-between;">Semanas
+                                    Fase 2: <input type="number" id="cfgP2" value="9" style="width:50px; padding:2px"
+                                        onchange="App.planning.updateConfig()"></label>
+                                <label style="font-size:0.8rem; display:flex; justify-content:space-between;">Semanas
+                                    Fase 3: <input type="number" id="cfgP3" value="2" style="width:50px; padding:2px"
+                                        onchange="App.planning.updateConfig()"></label>
+
+                            </div>
+                        </details>
+                    </div>
+
+                    <!-- Date Nav -->
+                    <div class="date-nav">
+                        <button class="icon-btn" onclick="App.planning.shiftDate(-1)"><i
+                                data-lucide="chevron-left"></i></button>
+                        <span id="planningLabel"
+                            style="font-weight:600; font-size:0.9rem; min-width:140px; text-align:center"></span>
+                        <button class="icon-btn" onclick="App.planning.shiftDate(1)"><i
+                                data-lucide="chevron-right"></i></button>
+                    </div>
+
+                    <!-- View Switcher -->
+                    <div class="view-switcher-pill">
+                        <button class="pill-btn active" onclick="App.planning.setView('month')"
+                            id="btnPlanMonth">Mes</button>
+                        <button class="pill-btn" onclick="App.planning.setView('list')" id="btnPlanList">Lista</button>
+                    </div>
+                </header>
+
+                <div class="agenda-content-area">
+                    <!-- Week View -->
+                    <div id="plan-view-week" class="sub-view">
+                        <div id="planWeekGrid" class="week-grid"></div>
+                    </div>
+
+                    <!-- Month View -->
+                    <div id="plan-view-month" class="sub-view active">
+                        <div id="planMonthGrid" class="month-grid"></div>
+                    </div>
+
+                    <!-- List View -->
+                    <div id="plan-view-list" class="sub-view">
+                        <div class="list-container" id="planListContainer"></div>
                     </div>
                 </div>
             </div>

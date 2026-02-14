@@ -1,4 +1,5 @@
 // --- NAMESPACE & CONFIG ---
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwKqKdyjgRwMc5w4PdYmIcoAnrbqZvLtL6r5Sn9iCsKXoNm_QHwbXNPfa9F7Epfc9gmKw/exec"; // Integrated
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
 const csvUrl = isLocal
     ? 'https://corsproxy.io/?' + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSU9NpgyN3RgNiPntHNLMDVmZNdfdop55kuW1ZLZQ8YqVGjawosab7uhZsaFuUcxdk_VOZ9NBd_qpiZ/pub?output=csv')
@@ -32,7 +33,8 @@ const App = {
             'Participación Ciudadana': 'black',
             'General': 'black',
             'Vivero': 'black'
-        }
+        },
+        planning: JSON.parse(localStorage.getItem('agenda_planning_config') || '{"p0":28,"p1":24,"p2":9,"p3":2}')
     },
 
     // STATE
@@ -70,6 +72,7 @@ const App = {
             App.ui.initDateInputs();
             App.data.refresh();
 
+            console.log("App v12.1 Loaded - Debug Mode"); // Version Check
             if (window.lucide) lucide.createIcons();
 
             // Set initial active states for buttons if needed
@@ -88,6 +91,7 @@ const App = {
             document.querySelectorAll(`.nav-item[onclick*="${tabId}"]`).forEach(b => b.classList.add('active'));
 
             if (tabId === 'calendar' || tabId === 'agenda') App.agenda.render();
+            else if (tabId === 'planning') App.planning.render();
             else if (tabId === 'reports') App.reports.render();
             else if (tabId === 'incidents') App.incidents.render();
         }
@@ -113,9 +117,57 @@ const App = {
             });
         },
 
+        saveToSheets: (id) => {
+            console.log("DEBUG: Calling saveToSheets with ID:", id);
+            // alert("DEBUG: Inicio Guardado para ID: " + id); 
+
+            if (SCRIPT_URL === "PONER_AQUI_TU_URL") {
+                console.warn("Save skipped: SCRIPT_URL not set.");
+                return;
+            }
+
+            const evt = App.state.allEvents.find(e => e.rawId == id);
+            if (!evt || !evt.uniqueId) {
+                console.warn("Save skipped: Event not found or missing Unique ID.");
+                alert("Error: Este evento no tiene ID único (Col AD). No se pueden guardar cambios.");
+                return;
+            }
+
+            const cp = JSON.parse(localStorage.getItem('agenda_checkpoints') || '{}')[id] || {};
+            const prod = JSON.parse(localStorage.getItem('agenda_production') || '{}')[id] || '';
+
+            const payload = {
+                action: 'update', // Maintain for potential future routing, though script doesn't use it yet
+                id: evt.uniqueId,
+                fase0: !!cp.p0,
+                fase1: !!cp.p1,
+                fase2: !!cp.p2,
+                fase3: !!cp.p3,
+                produccion: prod
+            };
+
+            console.log("Saving to Sheets...", payload);
+            alert(`Guardando cambios para ID: ${evt.uniqueId}...`); // Debug Feedback
+
+            // Fire and forget (using text/plain to avoid CORS Preflight)
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            }).then(() => {
+                console.log("Sent correctly.");
+                // alert("Cambios enviados a Google Sheets."); // Optional confirmation
+            }).catch(e => {
+                console.error("Sheet Error:", e);
+                alert("Error de conexión con Google Sheets.");
+            });
+        },
+
         process: (rows) => {
             let raw = [];
             let colorIdx = 0;
+            const overrides = JSON.parse(localStorage.getItem('agenda_overrides') || '{}');
 
             rows.forEach((row, idx) => {
                 if (idx < 2) return;
@@ -125,6 +177,10 @@ const App = {
                 const deleg = (row[0] || 'General').split(',')[0].trim();
                 const delegKey = App.config.delegationColors[deleg] ? deleg : 'Eventos';
 
+                // Unique ID from Col AD (Index 29)
+                const uniqueId = (row[29] || '').trim();
+                if (!uniqueId) return; // Skip invalid rows as per user request to avoid errors
+
                 if (!App.state.delegationColors[deleg]) {
                     App.state.delegationColors[deleg] = App.config.delegationColors[delegKey];
                 }
@@ -133,8 +189,16 @@ const App = {
                 const title = (row[4] || 'Sin Título').trim();
                 const isAllDay = !row[11] || row[11].trim() === '';
 
+                // Apply Overrides (Code 04 Security Result)
+                if (overrides[idx]) {
+                    const o = overrides[idx];
+                    if (o.start) start = new Date(o.start);
+                    if (o.end) end = new Date(o.end);
+                }
+
                 raw.push({
-                    rawId: idx,
+                    rawId: idx, // Keep internal index for UI interactions
+                    uniqueId: uniqueId, // External ID for syncing
                     allDay: isAllDay,
                     delegation: deleg,
                     organizer: (row[1] || '').trim(),
@@ -165,6 +229,8 @@ const App = {
                         stage: App.helpers.checkBool(row[20]),
                         police: App.helpers.checkBool(row[21])
                     },
+                    expedient: (row[22] || '').trim(),
+                    link: (row[23] || '').trim(),
                     hasConflict: false, // reset check
                     operationalDate: (start.getHours() < 6)
                         ? new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1)
@@ -312,6 +378,53 @@ const App = {
         resetQuick: () => {
             App.state.agenda.quickFilters = { police: false, stage: false, mega: false };
             App.agenda.render();
+        },
+
+        updateEventDate: (rawId, field, inputEl) => {
+            const code = prompt("Introduzca código de seguridad (04) para modificar la fecha/hora:");
+            if (code !== '04') {
+                alert("Código incorrecto.");
+                App.ui.openDrawerId(rawId); // Revert/Reload
+                return;
+            }
+
+            const e = App.state.allEvents.find(x => x.rawId == rawId);
+            if (!e) return;
+
+            const val = inputEl.value;
+            let newStart = new Date(e.start);
+            let newEnd = new Date(e.end);
+
+            if (field === 'date') {
+                const parts = val.split('-'); // YYYY-MM-DD
+                // Set year/month/date for Start
+                newStart.setFullYear(parts[0], parts[1] - 1, parts[2]);
+
+                // Preserve duration for End
+                const duration = e.end.getTime() - e.start.getTime();
+                newEnd = new Date(newStart.getTime() + duration);
+            }
+            else if (field === 'start') {
+                const parts = val.split(':');
+                newStart.setHours(parts[0], parts[1]);
+
+                // Preserve duration
+                const duration = e.end.getTime() - e.start.getTime();
+                newEnd = new Date(newStart.getTime() + duration);
+            }
+            else if (field === 'end') {
+                const parts = val.split(':');
+                newEnd.setHours(parts[0], parts[1]);
+                // If end is before start, assume next day? Or just let it be (user error check later)
+                if (newEnd < newStart) newEnd.setDate(newEnd.getDate() + 1);
+            }
+
+            const overrides = JSON.parse(localStorage.getItem('agenda_overrides') || '{}');
+            overrides[rawId] = { start: newStart.toISOString(), end: newEnd.toISOString() };
+            localStorage.setItem('agenda_overrides', JSON.stringify(overrides));
+
+            App.data.refresh(); // Reload data to apply overrides
+            setTimeout(() => App.ui.openDrawerId(rawId), 500); // Re-open drawer
         },
 
         // Navigation
@@ -464,6 +577,268 @@ const App = {
             const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
             setTxt('incHighCount', visibleIncidents.filter(i => i.sev === 'high').length);
             setTxt('incMedCount', visibleIncidents.filter(i => i.sev !== 'high').length);
+        }
+    },
+
+    planning: {
+        currentDate: new Date(),
+        viewMode: 'month',
+
+        updateConfig: () => {
+            const code = prompt("Introduzca código de seguridad (04) para modificar los plazos:");
+            if (code !== '04') {
+                alert("Código incorrecto.");
+                App.planning.render(); // Revert inputs to current state
+                return;
+            }
+
+            const getVal = (id) => parseInt(document.getElementById(id).value) || 0;
+            App.config.planning = {
+                p0: getVal('cfgP0'),
+                p1: getVal('cfgP1'),
+                p2: getVal('cfgP2'),
+                p3: getVal('cfgP3')
+            };
+            localStorage.setItem('agenda_planning_config', JSON.stringify(App.config.planning));
+            App.planning.render();
+        },
+
+        // 1. Generate Milestones from Events
+        generateMilestones: () => {
+            const milestones = [];
+            const checkpoints = JSON.parse(localStorage.getItem('agenda_checkpoints') || '{}');
+            const cfg = App.config.planning;
+
+            // Use Global Filtered Events for Interconnectivity & Real-time filtering
+            App.state.globalFilteredEvents.forEach(e => {
+                const cp = checkpoints[e.rawId] || { p0: false, p1: false, p2: false, p3: false };
+
+                // Phase 0: Apertura
+                let d0 = new Date(e.start);
+                d0.setDate(d0.getDate() - (cfg.p0 * 7));
+                d0.setHours(9, 0, 0, 0);
+                App.planning.addMilestone(milestones, e, d0, 'Fase 0: Ap. Expte', 'p0', cp.p0, true);
+
+                // Phase 1: Contratación / Bases - Only if contracts
+                if (e.contracts) {
+                    let d1 = new Date(e.start);
+                    d1.setDate(d1.getDate() - (cfg.p1 * 7));
+                    d1.setHours(9, 0, 0, 0);
+                    App.planning.addMilestone(milestones, e, d1, 'Fase 1: Contratación / Bases', 'p1', cp.p1, true);
+                }
+
+                // Phase 2: Técnica - Only if services
+                const hasServices = Object.values(e.services).some(x => x);
+                if (hasServices) {
+                    let d2 = new Date(e.start);
+                    d2.setDate(d2.getDate() - (cfg.p2 * 7));
+                    d2.setHours(9, 0, 0, 0);
+                    App.planning.addMilestone(milestones, e, d2, 'Fase 2: Técnica', 'p2', cp.p2, true);
+                }
+
+                // Phase 3: Resolución - Mandatory
+                let d3 = new Date(e.start);
+                d3.setDate(d3.getDate() - (cfg.p3 * 7));
+                d3.setHours(9, 0, 0, 0);
+                App.planning.addMilestone(milestones, e, d3, 'Fase 3: Resolución', 'p3', cp.p3, true);
+            });
+
+            return milestones;
+        },
+
+        addMilestone: (list, parentEvent, date, title, phaseKey, isCompleted, isRequired) => {
+            // Business Day Logic:
+            // Friday (5) -> Workday (No change)
+            // Sat (6) -> Mon (+2)
+            // Sun (0) -> Tue (+2)
+            const day = date.getDay();
+            if (day === 0) date.setDate(date.getDate() + 2);
+            if (day === 6) date.setDate(date.getDate() + 2);
+
+            // Create "Event-like" object for rendering
+            list.push({
+                rawId: parentEvent.rawId + '_' + phaseKey,
+                parentId: parentEvent.rawId,
+                title: `${title} - ${parentEvent.title}`, // [Phase] - [Event Title]
+                start: date,
+                end: new Date(date.getTime() + 3600000), // 1 hour
+                delegation: parentEvent.delegation,
+                place: 'Hito de Planificación',
+                type: 'Hito',
+                publicType: 'Interno',
+                organizer: 'Interno',
+                access: 'N/A',
+                capacity: 0,
+                participants: 0,
+                services: {},
+                contracts: false,
+                operationalDate: date,
+                isMilestone: true,
+                phaseKey: phaseKey,
+                isCompleted: isCompleted,
+                isRequired: isRequired
+            });
+        },
+
+        toggleCheckpoint: (eventId, phaseKey) => {
+            const data = JSON.parse(localStorage.getItem('agenda_checkpoints') || '{}');
+            if (!data[eventId]) data[eventId] = {};
+
+            const currentState = !!data[eventId][phaseKey];
+            const action = currentState ? 'desmarcar' : 'validar';
+
+            const code = prompt(`Introduzca código de seguridad (80) para ${action}:`);
+            if (code !== '80') {
+                alert("Código incorrecto.");
+                // Re-render drawer to revert UI state
+                App.ui.openDrawerId(eventId);
+                return;
+            }
+
+            data[eventId][phaseKey] = !currentState;
+            localStorage.setItem('agenda_checkpoints', JSON.stringify(data));
+
+            // Sync to Google Sheets check
+            try {
+                App.data.saveToSheets(eventId);
+            } catch (e) { alert("Error llamando a Save: " + e.message); }
+
+            // Re-render app to update dots in views
+            App.agenda.render();
+            if (App.state.activeTab === 'planning') App.planning.render();
+            // Re-render drawer to show updated state (Last to avoid DOM issues)
+            App.ui.openDrawerId(eventId);
+        },
+        setProduction: (eventId, val, selectEl) => {
+            const prev = JSON.parse(localStorage.getItem('agenda_production') || '{}')[eventId] || 'Sin asignar';
+            if (val === prev) return;
+
+            const code = prompt(`Introduzca código de seguridad (80) para asignar producción a ${val}:`);
+            if (code === '80') {
+                const data = JSON.parse(localStorage.getItem('agenda_production') || '{}');
+                data[eventId] = val;
+                localStorage.setItem('agenda_production', JSON.stringify(data));
+
+                // Sync to Google Sheets
+                try { App.data.saveToSheets(eventId); } catch (e) { console.error(e); }
+
+                // Immediate Update across views
+                if (App.state.agenda.viewMode === 'month') App.ui.renderMonth(App.agenda.applyLocalFilters(App.state.globalFilteredEvents));
+                if (App.state.activeTab === 'planning') App.planning.render();
+
+                // Sync to Google Sheets
+                App.data.saveToSheets(eventId);
+
+            } else {
+                if (code !== null) alert("Código incorrecto.");
+                selectEl.value = prev; // Revert
+            }
+        },
+
+        getDotsHtml: (evt, style = '') => {
+            // Allow dots for Milestones (Planning) and Parents (Agenda)
+            const id = evt.parentId || evt.rawId;
+            const cp = JSON.parse(localStorage.getItem('agenda_checkpoints') || '{}')[id] || {};
+            const cfg = App.config.planning;
+
+            const getDot = (phase, weeks, isRequired) => {
+                if (!isRequired) return `<div style="width:0; height:0; overflow:hidden"></div>`; // Hidden
+
+                const isChecked = cp[phase];
+                let color = '#d1d5db'; // Gray (Pending)
+
+                if (isChecked) {
+                    color = '#22c55e'; // Green (Validated)
+                } else {
+                    let deadline = new Date(evt.start);
+                    deadline.setDate(deadline.getDate() - (weeks * 7));
+                    if (new Date() > deadline) color = '#ef4444'; // Red (Late)
+                }
+
+                return `<div style="width:8px; height:8px; border-radius:50%; background:${color}; border:1px solid rgba(0,0,0,0.1);" title="${phase === 'p0' ? 'Fase 0: Ap. Expte' :
+                    phase === 'p1' ? 'Fase 1: Contratación / Bases' :
+                        phase === 'p2' ? 'Fase 2: Técnica' :
+                            'Fase 3: Resolución'
+                    }"></div>`;
+            };
+
+            // Requirement Logic for Visibility
+            const hasContracts = evt.contracts; // Phase 1
+            // Phase 2: Muni Services OR Technical Services (Police/Stage/Mega)
+            const hasServices = evt.muniServices || Object.values(evt.services).some(x => x);
+
+            return `<div style="display:flex; gap:3px; position:absolute; bottom:5px; right:5px; z-index:10; ${style}">
+                ${getDot('p0', cfg.p0, true)}
+                ${getDot('p1', cfg.p1, hasContracts)}
+                ${getDot('p2', cfg.p2, hasServices)}
+                ${getDot('p3', cfg.p3, true)}
+            </div>`;
+        },
+
+        // Navigation (Copied from Agenda but targeting planning state)
+        shiftDate: (dir) => {
+            const d = App.planning.currentDate;
+            const mode = App.planning.viewMode;
+            if (mode === 'month') {
+                d.setDate(1); d.setMonth(d.getMonth() + dir);
+            } else {
+                d.setDate(d.getDate() + (dir * 7));
+            }
+            App.planning.currentDate = new Date(d);
+            App.planning.render();
+        },
+
+        setView: (mode) => {
+            App.planning.viewMode = mode;
+            // Update UI Buttons
+            document.querySelectorAll('#tab-planning .pill-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btnPlan${mode.charAt(0).toUpperCase() + mode.slice(1)}`).classList.add('active');
+
+            // Show/Hide Containers
+            ['week', 'month', 'list'].forEach(v => {
+                document.getElementById(`plan-view-${v}`).classList.toggle('active', v === mode);
+            });
+            App.planning.render();
+        },
+
+        render: () => {
+            const milestones = App.planning.generateMilestones();
+            const mode = App.planning.viewMode;
+            const d = App.planning.currentDate;
+            const cfg = App.config.planning;
+
+            // Sync Inputs
+            const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+            setVal('cfgP0', cfg.p0);
+            setVal('cfgP1', cfg.p1);
+            setVal('cfgP2', cfg.p2);
+            setVal('cfgP3', cfg.p3);
+
+            // Update Label
+            const label = document.getElementById('planningLabel');
+            if (label) {
+                if (mode === 'month') label.textContent = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).toUpperCase();
+                else if (mode === 'week') {
+                    const start = App.helpers.getStartOfWeek(d);
+                    const end = new Date(start); end.setDate(start.getDate() + 6);
+                    label.textContent = `${start.getDate()} ${start.toLocaleDateString('es-ES', { month: 'short' })} - ${end.getDate()} ${end.toLocaleDateString('es-ES', { month: 'short' })}`;
+                } else {
+                    label.textContent = 'LISTADO DE HITOS';
+                }
+            }
+
+            // Calculate View Start Date
+            let viewStart;
+            if (mode === 'month') {
+                viewStart = new Date(d.getFullYear(), d.getMonth(), 1);
+            } else {
+                viewStart = App.helpers.getStartOfWeek(d);
+            }
+
+            // Render Views
+            // Remove Week view support for Planning Tab
+            if (mode === 'month') App.ui.renderMonth(milestones, 'planMonthGrid', viewStart);
+            else App.ui.renderList(milestones, 'planListContainer'); // Default to List if not Month
         }
     },
 
@@ -797,8 +1172,8 @@ const App = {
             if (c) c.textContent = `${App.state.globalFilteredEvents.length} eventos`;
         },
 
-        renderWeek: (data) => {
-            const start = App.state.agenda.currentWeekStart;
+        renderWeek: (data, containerId = 'weekGrid', startDate = App.state.agenda.currentWeekStart) => {
+            const start = startDate;
             if (!start) return;
             const dates = Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
             const end = new Date(start); end.setDate(start.getDate() + 7); // Physical end date for query, but logic uses operational
@@ -809,7 +1184,7 @@ const App = {
                 return opDate >= start && opDate < end;
             });
 
-            const grid = document.getElementById('weekGrid');
+            const grid = document.getElementById(containerId);
             if (!grid) return; grid.innerHTML = '';
 
             // Header
@@ -825,6 +1200,10 @@ const App = {
             // Time Column (06:00 to 05:00 next day)
             const hoursSequence = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5];
             let timeHtml = '<div style="background:#f8fafc;">' + hoursSequence.map(h => `<div style="height:60px; border-bottom:1px solid #e2e8f0; text-align:right; padding-right:8px; font-size:0.75rem; color:#64748b; transform:translateY(-10px)">${h}:00</div>`).join('') + '</div>';
+
+            // Checkpoints Helper
+            const getDotsHtml = App.planning.getDotsHtml;
+
 
             // Days
             const colHtml = dates.map(d => {
@@ -852,7 +1231,10 @@ const App = {
                 // All Day Header
                 if (allDayEvts.length > 0) {
                     html += `<div style="background:#f1f5f9; border-bottom:1px solid #ccc; padding:2px;">
-                        ${allDayEvts.map(e => `<div onclick="App.ui.openDrawerId(${e.rawId})" style="cursor:pointer; font-size:0.7em; margin-bottom:1px; background:white; padding:1px; border-left:3px solid ${App.state.delegationColors[e.delegation]}">${e.title}</div>`).join('')}
+                        ${allDayEvts.map(e => `<div onclick="App.ui.openDrawerId('${e.rawId}')" style="cursor:pointer; font-size:0.7em; margin-bottom:1px; background:white; padding:1px; border-left:3px solid ${App.state.delegationColors[e.delegation]}">
+                            ${e.title}
+                            ${getDotsHtml(e)}
+                        </div>`).join('')}
                      </div>`;
                 }
 
@@ -894,6 +1276,7 @@ const App = {
                         
                         <div style="font-size:0.9em; color:${textCol}; opacity:0.9;">${durStr}</div>
                         <div style="font-size:0.9em; color:${textCol}; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📍 ${e.place}</div>
+                        ${getDotsHtml(e)}
                     </div>`;
                 });
                 html += '</div>';
@@ -907,12 +1290,12 @@ const App = {
             if (wl) wl.textContent = `${dates[0].toLocaleDateString()} - ${dates[6].toLocaleDateString()}`;
         },
 
-        renderMonth: (data) => {
-            const grid = document.getElementById('monthGrid');
+        renderMonth: (data, containerId = 'monthGrid', startDate = App.state.agenda.currentWeekStart) => {
+            const grid = document.getElementById(containerId);
             if (!grid) return;
             grid.innerHTML = '';
 
-            const d = App.state.agenda.currentWeekStart || new Date();
+            const d = startDate || new Date();
             const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
             const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
             const events = data.filter(e => e.start <= mEnd && e.end >= mStart);
@@ -945,6 +1328,10 @@ const App = {
             let startDay = mStart.getDay() || 7;
             for (let i = 1; i < startDay; i++) bodyHtml += `<div style="background:#f8fafc;"></div>`;
 
+            // Checkpoints Helper
+            const getDotsHtml = App.planning.getDotsHtml;
+
+
             for (let i = 1; i <= mEnd.getDate(); i++) {
                 const current = new Date(d.getFullYear(), d.getMonth(), i);
                 const dayEvts = events.filter(e => App.helpers.isSameDay(e.operationalDate, current));
@@ -964,7 +1351,7 @@ const App = {
                     <!-- All Day Section -->
                     <div style="display:flex; flex-direction:column; gap:1px; margin-bottom:2px;">
                         ${allDayEvts.map(e => `
-                            <div onclick="App.ui.openDrawerId(${e.rawId})" 
+                            <div onclick="App.ui.openDrawerId('${e.rawId}')" 
                                 style="cursor:pointer; font-size:0.7em; background:#f1f5f9; color:#475569; border-left:3px solid ${App.state.delegationColors[e.delegation]}; padding:1px 2px; white-space:nowrap; overflow:hidden;">
                                 ${e.title}
                             </div>
@@ -984,18 +1371,58 @@ const App = {
                     if (duration >= 2) heightClass = 'min-height:45px';
                     if (duration >= 4) heightClass = 'min-height:70px';
 
+                    const prodName = JSON.parse(localStorage.getItem('agenda_production') || '{}')[e.rawId];
+                    const startTime = e.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    // PLANNING CARD (Milestone) - STRICT 3-LINE FORMAT
+                    if (e.isMilestone) {
+                        return `
+                            <div onclick="App.ui.openDrawerId('${e.rawId}')" 
+                                title="${e.title}"
+                                style="cursor:pointer; font-size:0.75em; background:${App.state.delegationColors[e.delegation] || '#ccc'}; color:${App.config.textColors[e.delegation] || 'white'}; 
+                                border-radius:4px; border:1px solid white; position:relative;
+                                padding:4px; overflow:hidden; display:flex; flex-direction:column; justify-content:start; ${heightClass}; margin-bottom:1px; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
+                                
+                                <!-- L1: Phase Name (e.g. Fase 0: Ap. Expte) -->
+                                <div style="font-size:0.85em; opacity:0.9; margin-bottom:2px; font-weight:600;">${e.title.split(' - ')[0]}</div>
+                                
+                                <!-- L2: Event Title (e.g. Concierto X) -->
+                                <div style="font-weight:700; font-size:0.95em; line-height:1.1; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${e.title.split(' - ')[1] || e.title}</div>
+                                
+                                <!-- L3: Production Name (e.g. Pablo) - Right aligned, no bold -->
+                                <div style="font-size:0.85em; opacity:0.9; font-weight:400; text-align:right;">${prodName && prodName !== 'Sin asignar' ? prodName : ''}</div>
+
+                                <!-- Dots: Bottom Right (Fixed) -->
+                                <div style="position:absolute; bottom:3px; right:3px; display:flex; gap:3px;">
+                                    ${getDotsHtml(e)}
+                                </div>
+                            </div>`;
+                    }
+
+                    // STANDARD CARD (Agenda)
                     return `
-                            <div onclick="App.ui.openDrawerId(${e.rawId})" 
+                            <div onclick="App.ui.openDrawerId('${e.rawId}')" 
                                 title="${e.title} (${durStr})"
                                 style="cursor:pointer; font-size:0.75em; background:${App.state.delegationColors[e.delegation] || '#ccc'}; color:${App.config.textColors[e.delegation] || 'white'}; 
-                                border-radius:3px; border:1px solid white; 
-                                padding:2px 4px; overflow:hidden; display:flex; flex-direction:column; justify-content:start; ${heightClass}; margin-bottom:1px;">
-                                <div style="display:flex; justify-content:space-between; align-items:baseline">
-                                    <strong style="font-size:0.85em;">${e.start.getHours().toString().padStart(2, '0')}:${e.start.getMinutes().toString().padStart(2, '0')}</strong>
-                                    ${duration >= 2 ? `<span style="opacity:0.8; font-size:0.8em">${durStr}</span>` : ''}
+                                border-radius:4px; border:1px solid white; position:relative;
+                                padding:4px; overflow:hidden; display:flex; flex-direction:column; justify-content:start; ${heightClass}; margin-bottom:1px; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
+                                
+                                <!-- L1: Time + Duration -->
+                                <div style="display:flex; justify-content:space-between; align-items:baseline; font-size:0.85em; opacity:0.9; margin-bottom:2px; font-weight:400;">
+                                     <span>${e.start.getHours().toString().padStart(2, '0')}:${e.start.getMinutes().toString().padStart(2, '0')}</span>
+                                     <span>${durStr}</span>
                                 </div>
-                                <span style="line-height:1.1; font-weight:500; display:-webkit-box; -webkit-line-clamp:${duration >= 4 ? 4 : duration >= 2 ? 2 : 1}; -webkit-box-orient:vertical; overflow:hidden;">${e.title}</span>
-                                ${duration >= 4 ? `<div style="margin-top:auto; font-size:0.8em; opacity:0.9">📍 ${e.place}</div>` : ''}
+                                
+                                <!-- L2: Title -->
+                                <div style="font-weight:700; font-size:0.95em; line-height:1.1; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${e.title}</div>
+                                
+                                <!-- L3: Production Name -->
+                                <div style="font-size:0.85em; opacity:0.9; font-weight:400; text-align:right;">${prodName && prodName !== 'Sin asignar' ? prodName : ''}</div>
+
+                                <!-- Dots: Bottom Right (Fixed) -->
+                                <div style="position:absolute; bottom:3px; right:3px; display:flex; gap:3px;">
+                                    ${!e.isMilestone ? getDotsHtml(e) : ''}
+                                </div>
                             </div>`;
                 }).join('')}
                     </div>
@@ -1006,8 +1433,8 @@ const App = {
             grid.innerHTML = headerHtml + bodyHtml;
         },
 
-        renderList: (data) => {
-            const c = document.getElementById('listContainer');
+        renderList: (data, containerId = 'listContainer') => {
+            const c = document.getElementById(containerId);
             if (!c) return;
             if (data.length === 0) {
                 c.innerHTML = '<div style="padding:2rem; text-align:center; color:#94a3b8">No hay eventos para los filtros actuales.</div>';
@@ -1025,8 +1452,12 @@ const App = {
                 const m = Math.round((durationMs % 3600000) / 60000);
                 const durationStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} h`;
 
+                // Checkpoints Helper
+                const getDotsHtml = (e) => App.planning.getDotsHtml(e, 'margin-left:8px');
+
+
                 return `
-    <div class="card" onclick="App.ui.openDrawerId(${e.rawId})" style="margin-bottom:8px; cursor:pointer; border-left:4px solid ${App.state.delegationColors[e.delegation] || '#ccc'}; padding:1rem;">
+    <div class="card" onclick="App.ui.openDrawerId('${e.rawId}')" style="margin-bottom:8px; cursor:pointer; border-left:4px solid ${App.state.delegationColors[e.delegation] || '#ccc'}; padding:1rem;">
                     <!-- Header: Date, Time, Duration -->
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-size:0.85rem; color:#64748b;">
                         <div>
@@ -1035,6 +1466,7 @@ const App = {
                             ${!e.allDay ? `<span style="background:#f1f5f9; padding:1px 6px; border-radius:4px; margin-left:8px; font-size:0.75em;">⏱️ ${durationStr}</span>` : ''}
                         </div>
                         <span class="badge" style="background:${App.state.delegationColors[e.delegation] || '#eee'}44; color:${App.state.delegationColors[e.delegation] || '#666'}">${e.delegation}</span>
+                        ${getDotsHtml(e)}
                     </div>
 
                     <!-- Title -->
@@ -1068,14 +1500,27 @@ const App = {
         },
 
         openDrawerId: (id) => {
-            const e = App.state.allEvents.find(x => x.rawId === id);
-            App.ui.openDrawer(e);
+            // Handle Milestone IDs (e.g. "12_p0" -> "12")
+            const parentId = String(id).split('_')[0];
+            const e = App.state.allEvents.find(x => x.rawId == parentId);
+            if (e) App.ui.openDrawer(e);
         },
         openDrawer: (e) => {
             const d = document.getElementById('drawerContent');
             if (!d) return;
             const labels = { police: '👮 Policía', stage: '🎪 Escenario', mega: '🎤 Megafonía' };
             const titleColor = App.config.delegationColors[e.delegation] || '#1e293b';
+
+            // Checkpoints & Production
+            const cp = JSON.parse(localStorage.getItem('agenda_checkpoints') || '{}')[e.rawId] || {};
+            const prod = JSON.parse(localStorage.getItem('agenda_production') || '{}')[e.rawId] || 'Sin asignar';
+            const cfg = App.config.planning;
+
+            // Expedient Link
+            const expHtml = e.link
+                ? `<a href="${e.link}" target="_blank" style="color:var(--primary); text-decoration:underline; font-weight:bold;">${e.expedient || 'Ver Expediente'}</a>`
+                : (e.expedient || '<span style="color:#ccc; font-style:italic;">Sin expediente</span>');
+
             d.innerHTML = `
                  <h2 class="drawer-title" style="color:${titleColor}">${e.title}</h2>
                  <div class="drawer-meta">
@@ -1084,30 +1529,62 @@ const App = {
                  </div>
                  <div class="drawer-grid">
                      <div>
-                        <p class="text-muted">Lugar</p>
-                        <p>📍 ${e.place}</p>
+                        <p class="text-muted">Expediente</p>
+                        <p>${expHtml}</p>
                      </div>
                      <div>
                         <p class="text-muted">Horario</p>
                         <p>📅 ${App.helpers.isSameDay(e.start, e.end) ? e.start.toLocaleDateString() : (e.start.toLocaleDateString() + ' - ' + e.end.toLocaleDateString())} <br> ${e.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${e.end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                      </div>
                      <div>
+                        <p class="text-muted">Lugar</p>
+                        <p>📍 ${e.place}</p>
+                     </div>
+                     <div>
                         <p class="text-muted">Afluencia</p>
                         <p>👥 ${e.capacity} (Aforo) <br> 🎟️ ${e.participants} (Estimado)</p>
                      </div>
-                     <div>
-                        <p class="text-muted">Acceso</p>
-                        <p>${e.access} (${e.publicType})</p>
-                     </div>
                  </div>
+
                  <hr style="margin:1rem 0; border-top:1px solid #eee">
+                 
                  <h3 class="drawer-section-title">Requerimientos</h3>
                  <div class="drawer-tags">
-                     ${Object.keys(e.services).filter(k => e.services[k]).map(k => `<span class="chip-toggle active">${labels[k] || k}</span>`).join('')}
-                     ${e.contracts ? '<span class="chip-toggle active">Contratos</span>' : ''}
+                     ${e.services.police ? `<span class="badge" style="background:#f1f5f9; color:black; border:none; font-weight:400; font-size:0.85rem;">👮 Policía</span>` : ''}
+                     ${e.services.stage ? `<span class="badge" style="background:#f1f5f9; color:black; border:none; font-weight:400; font-size:0.85rem;">🎪 Escenario</span>` : ''}
+                     ${e.services.mega ? `<span class="badge" style="background:#f1f5f9; color:black; border:none; font-weight:400; font-size:0.85rem;">🎤 Megafonía</span>` : ''}
+                     ${e.muniServices ? `<span class="badge" style="background:#f1f5f9; color:black; border:none; font-weight:400; font-size:0.85rem;">🔧 Serv. Muni</span>` : ''}
+                     ${e.contracts ? `<span class="badge" style="background:#f1f5f9; color:black; border:none; font-weight:400; font-size:0.85rem;">📄 Contratos</span>` : ''}
                  </div>
+                 
+                 <!-- Planning Checkpoints -->
                  <hr style="margin:1rem 0; border-top:1px solid #eee">
+                 <h3 class="drawer-section-title">Hitos de Planificación</h3>
+                 <div style="display:flex; flex-direction:column; gap:0.5rem; background:#f8fafc; padding:1rem; border-radius:8px;">
+                    <!-- Phase 0: Always Visible -->
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" ${cp.p0 ? 'checked' : ''} onchange="App.planning.toggleCheckpoint('${e.rawId}','p0', this)"> <span style="font-size:0.9rem">Fase 0: Ap. Expte</span> <span style="font-size:0.8em; color:#64748b">(-${cfg.p0} sem)</span></label>
+                    
+                    <!-- Phase 1: Contracts -->
+                    ${e.contracts ? `<label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" ${cp.p1 ? 'checked' : ''} onchange="App.planning.toggleCheckpoint('${e.rawId}','p1', this)"> <span style="font-size:0.9rem">Fase 1: Contratación / Bases</span> <span style="font-size:0.8em; color:#64748b">(-${cfg.p1} sem)</span></label>` : ''}
+                    
+                    <!-- Phase 2: Technical / Muni Services -->
+                    ${(e.muniServices || Object.values(e.services).some(x => x)) ? `<label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" ${cp.p2 ? 'checked' : ''} onchange="App.planning.toggleCheckpoint('${e.rawId}','p2', this)"> <span style="font-size:0.9rem">Fase 2: Técnica</span> <span style="font-size:0.8em; color:#64748b">(-${cfg.p2} sem)</span></label>` : ''}
+                    
+                    <!-- Phase 3: Always Visible -->
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" ${cp.p3 ? 'checked' : ''} onchange="App.planning.toggleCheckpoint('${e.rawId}','p3', this)"> <span style="font-size:0.9rem">Fase 3: Resolución</span> <span style="font-size:0.8em; color:#64748b">(-${cfg.p3} sem)</span></label>
+                 </div>
 
+                 <!-- Production Assignment -->
+                 <div style="margin-top:1rem; padding:0;">
+                    <label style="display:block; font-size:0.85rem; margin-bottom:0.2rem; color:#64748b">Producción</label>
+                    <select onchange="App.planning.setProduction('${e.rawId}', this.value, this)" style="width:auto; min-width:150px; padding:4px 8px; border-radius:4px; border:1px solid #e2e8f0; font-size:0.9rem; background:white; cursor:pointer;">
+                        <option value="Sin asignar" ${prod === 'Sin asignar' ? 'selected' : ''}>Sin asignar</option>
+                        <option value="Juanca" ${prod === 'Juanca' ? 'selected' : ''}>Juanca</option>
+                        <option value="Camacho" ${prod === 'Camacho' ? 'selected' : ''}>Camacho</option>
+                        <option value="Nacho" ${prod === 'Nacho' ? 'selected' : ''}>Nacho</option>
+                        <option value="Pablo" ${prod === 'Pablo' ? 'selected' : ''}>Pablo</option>
+                    </select>
+                 </div>
              `;
             document.getElementById('drawerOverlay').classList.remove('hidden');
         },
