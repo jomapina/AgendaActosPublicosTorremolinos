@@ -25,8 +25,8 @@ const App = {
             'Vivero': '#e9ecef'     // Mantener Gris muy claro
         },
         textColors: {
-            'Educación': 'black',
-            'Juventud': 'black', // Updated per user request
+            'Educación': 'white',
+            'Juventud': 'white',
             'Mayores': 'black',
             'Protocolo': 'black',
             'Comercio': 'black',
@@ -157,9 +157,10 @@ const App = {
                 body: JSON.stringify(payload)
             }).then(() => {
                 console.log("Sent correctly.");
-                // alert("Cambios enviados a Google Sheets."); // Optional confirmation
+                // Silent Success
             }).catch(e => {
                 console.error("Sheet Error:", e);
+                // Keep error alert
                 alert("Error de conexión con Google Sheets.");
             });
         },
@@ -168,6 +169,10 @@ const App = {
             let raw = [];
             let colorIdx = 0;
             const overrides = JSON.parse(localStorage.getItem('agenda_overrides') || '{}');
+
+            // Sync State Containers (Sheet is Master)
+            const syncCheckpoints = {};
+            const syncProduction = {};
 
             rows.forEach((row, idx) => {
                 if (idx < 2) return;
@@ -184,6 +189,22 @@ const App = {
                 if (!App.state.delegationColors[deleg]) {
                     App.state.delegationColors[deleg] = App.config.delegationColors[delegKey];
                 }
+
+                // --- SYNC READ LOGIC ---
+                // Map CSV Columns Y(24), Z(25), AA(26), AB(27), AC(28) to State
+                const isTrue = (v) => String(v).toUpperCase() === 'TRUE';
+                const p0 = isTrue(row[24]);
+                const p1 = isTrue(row[25]);
+                const p2 = isTrue(row[26]);
+                const p3 = isTrue(row[27]);
+                let prod = (row[28] || '').trim();
+                // Default handling for Production
+                if (prod === '') prod = 'Sin asignar';
+
+                // Populate Sync Objects (Key: RawId/Index)
+                syncCheckpoints[idx] = { p0, p1, p2, p3 };
+                syncProduction[idx] = prod;
+                // -----------------------
 
                 const [start, end] = App.helpers.parseDates(dStr, row[11], row[10], row[12]);
                 const title = (row[4] || 'Sin Título').trim();
@@ -239,6 +260,12 @@ const App = {
             });
 
             App.state.allEvents = raw.sort((a, b) => a.start - b.start);
+
+            // Commit Sync to LocalStorage (Sheet -> App)
+            if (raw.length > 0) {
+                localStorage.setItem('agenda_checkpoints', JSON.stringify(syncCheckpoints));
+                localStorage.setItem('agenda_production', JSON.stringify(syncProduction));
+            }
 
             // 1. Render data immediately (Priority for UX)
             App.filters.apply();
@@ -381,7 +408,7 @@ const App = {
         },
 
         updateEventDate: (rawId, field, inputEl) => {
-            const code = prompt("Introduzca código de seguridad (04) para modificar la fecha/hora:");
+            const code = prompt("Introduzca código de seguridad:");
             if (code !== '04') {
                 alert("Código incorrecto.");
                 App.ui.openDrawerId(rawId); // Revert/Reload
@@ -585,7 +612,7 @@ const App = {
         viewMode: 'month',
 
         updateConfig: () => {
-            const code = prompt("Introduzca código de seguridad (04) para modificar los plazos:");
+            const code = prompt("Introduzca código de seguridad:");
             if (code !== '04') {
                 alert("Código incorrecto.");
                 App.planning.render(); // Revert inputs to current state
@@ -687,7 +714,7 @@ const App = {
             const currentState = !!data[eventId][phaseKey];
             const action = currentState ? 'desmarcar' : 'validar';
 
-            const code = prompt(`Introduzca código de seguridad (80) para ${action}:`);
+            const code = prompt(`Introduzca código de seguridad:`);
             if (code !== '80') {
                 alert("Código incorrecto.");
                 // Re-render drawer to revert UI state
@@ -713,7 +740,7 @@ const App = {
             const prev = JSON.parse(localStorage.getItem('agenda_production') || '{}')[eventId] || 'Sin asignar';
             if (val === prev) return;
 
-            const code = prompt(`Introduzca código de seguridad (80) para asignar producción a ${val}:`);
+            const code = prompt(`Introduzca código de seguridad:`);
             if (code === '80') {
                 const data = JSON.parse(localStorage.getItem('agenda_production') || '{}');
                 data[eventId] = val;
