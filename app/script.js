@@ -109,8 +109,8 @@ const App = {
             // Helper to fetch and validate single proxy
             const tryProxy = async (proxyUrl) => {
                 const finalUrl = proxyUrl + encodeURIComponent(target);
-                // console.log(`Racing Proxy: ${proxyUrl}`); 
-                const response = await fetch(finalUrl, { signal: AbortSignal.timeout(10000) }); // 10s timeout
+                // Reduce timeout to 3.5s to fail faster if proxy is blocked/slow
+                const response = await fetch(finalUrl, { signal: AbortSignal.timeout(3500) });
                 if (!response.ok) throw new Error(`Status ${response.status}`);
                 const text = await response.text();
 
@@ -200,10 +200,13 @@ const App = {
             fetch(SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
+                cache: 'no-cache', // Ensure no caching
+                credentials: 'omit', // Don't send cookies (avoid 3rd party blocks)
+                keepalive: true, // Ensure request survives page unload
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(payload)
             }).then(() => {
-                console.log("Save request sent (JSON/No-CORS). Assuming success.");
+                console.log("Save request sent (JSON/No-CORS/Omit). Assuming success.");
             }).catch(e => {
                 console.error("Sheet Connection Error:", e);
                 // Keep error alert but less intrusive
