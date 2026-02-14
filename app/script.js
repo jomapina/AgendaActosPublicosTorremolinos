@@ -1,28 +1,31 @@
 // --- NAMESPACE & CONFIG ---
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwKqKdyjgRwMc5w4PdYmIcoAnrbqZvLtL6r5Sn9iCsKXoNm_QHwbXNPfa9F7Epfc9gmKw/exec"; // Integrated
 // Force Proxy URL for both Local and Prod to ensure fresh data (Cache busting added in App.init)
-const PROXY_BASE = 'https://api.allorigins.win/raw?url=';
 const GOOGLE_CSV_RAW = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSU9NpgyN3RgNiPntHNLMDVmZNdfdop55kuW1ZLZQ8YqVGjawosab7uhZsaFuUcxdk_VOZ9NBd_qpiZ/pub?output=csv';
+const PROXIES = [
+    'https://corsproxy.io/?', // Primary
+    'https://api.allorigins.win/raw?url=' // Fallback
+];
+
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
 
 const App = {
     config: {
-        // csvUrl: csvUrl, // Removed in favor of dynamic construction
         delegationColors: {
-            'Educación': '#78C2AD', // Aguamarina Mate (Texto Negro)
-            'Eventos': '#5D8AA8',   // Azul Denim (Texto Blanco)
-            'Políticas Sociales': '#C38D9E', // Orquídea Mate (Texto Blanco)
-            'Deportes': '#E2725B',  // Terracota (Texto Blanco)
-            'Juventud': '#FFAB76',  // Salmón (Texto Blanco)
-            'Igualdad': '#A28089',  // Lavanda Ceniza (Texto Blanco)
-            'Cultura': '#87A96B',   // Verde Salvia (Texto Blanco)
-            'Mayores': '#F0E68C',   // Crema (Texto Negro)
-            'Protocolo': '#C2B280', // Arena (Texto Negro)
-            'Comercio': '#B2BEB5',  // Gris Perla (Texto Negro)
-            'Participación Ciudadana': '#F4C2C2', // Rosa Palo (Texto Negro)
-            'Medio Ambiente': '#679267', // Verde Musgo (Texto Blanco)
-            'General': '#e9ecef',   // Mantener Gris muy claro
-            'Vivero': '#e9ecef'     // Mantener Gris muy claro
+            'Educación': '#78C2AD',
+            'Eventos': '#5D8AA8',
+            'Políticas Sociales': '#C38D9E',
+            'Deportes': '#E2725B',
+            'Juventud': '#FFAB76',
+            'Igualdad': '#A28089',
+            'Cultura': '#87A96B',
+            'Mayores': '#F0E68C',
+            'Protocolo': '#C2B280',
+            'Comercio': '#B2BEB5',
+            'Participación Ciudadana': '#F4C2C2',
+            'Medio Ambiente': '#679267',
+            'General': '#e9ecef',
+            'Vivero': '#e9ecef'
         },
         textColors: {
             'Educación': 'white',
@@ -98,28 +101,41 @@ const App = {
     },
 
     data: {
+        fetchCSV: async (url) => {
+            const bust = `&t=${Date.now()}`;
+            const target = url + bust;
+
+            for (const proxy of PROXIES) {
+                try {
+                    const finalUrl = proxy + encodeURIComponent(target);
+                    console.log(`Trying Proxy: ${proxy}`);
+                    const response = await fetch(finalUrl);
+                    if (!response.ok) throw new Error(`Status ${response.status}`);
+                    return await response.text();
+                } catch (e) {
+                    console.warn(`Proxy ${proxy} failed:`, e);
+                }
+            }
+            throw new Error("All proxies failed.");
+        },
+
         refresh: () => {
             const el = document.getElementById('lastUpdated');
             if (el) el.textContent = 'Cargando...';
 
-            // Add timestamp to prevent caching (Cloud Sync Fix)
-            const bust = `&t=${Date.now()}`;
-            const targetUrl = GOOGLE_CSV_RAW + bust;
-            const finalUrl = PROXY_BASE + encodeURIComponent(targetUrl);
-
-            console.log("Fetching CSV from:", finalUrl);
-
-            Papa.parse(finalUrl, {
-                download: true, header: false,
-                complete: (results) => {
-                    App.data.process(results.data);
-                    if (el) el.textContent = `Actualizado: ${new Date().toLocaleTimeString()}`;
-                },
-                error: (e) => {
-                    console.error("CSV Error:", e);
-                    if (el) el.textContent = 'Error de carga';
-                    alert("Error al cargar datos. Comprueba la conexión.");
-                }
+            App.data.fetchCSV(GOOGLE_CSV_RAW).then(csvText => {
+                Papa.parse(csvText, {
+                    header: false,
+                    complete: (results) => {
+                        App.data.process(results.data);
+                        if (el) el.textContent = `Actualizado: ${new Date().toLocaleTimeString()}`;
+                    },
+                    error: (e) => { throw e; } // Forward to catch
+                });
+            }).catch(e => {
+                console.error("CSV Fetch Error:", e);
+                if (el) el.textContent = 'Error de conexión';
+                alert("Error crítico: No se puede conectar con la hoja de cálculo. Intenta recargar.");
             });
         },
 
