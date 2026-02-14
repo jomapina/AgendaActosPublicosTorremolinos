@@ -112,7 +112,15 @@ const App = {
                     console.log(`Trying Proxy: ${proxy}`);
                     const response = await fetch(finalUrl);
                     if (!response.ok) throw new Error(`Status ${response.status}`);
-                    return await response.text();
+
+                    const text = await response.text();
+
+                    // VALIDATION: content must look like CSV
+                    if (!text) throw new Error("Empty response");
+                    if (text.trim().startsWith('<')) throw new Error("Response is HTML (Proxy Error Page)");
+                    if (text.length < 100) throw new Error("Response too short to be valid CSV");
+
+                    return text;
                 } catch (e) {
                     console.warn(`Proxy ${proxy} failed:`, e);
                 }
@@ -183,19 +191,27 @@ const App = {
             console.log("Saving to Sheets...", payload);
             // alert(`Guardando cambios para ID: ${evt.uniqueId}...`); // Debug Feedback Disabled
 
-            // Fire and forget (using text/plain to avoid CORS Preflight)
+            // Convert to Form Data (x-www-form-urlencoded) for GAS compatibility
+            const formData = new URLSearchParams();
+            formData.append('action', 'update');
+            formData.append('id', evt.uniqueId);
+            formData.append('fase0', !!cp.p0);
+            formData.append('fase1', !!cp.p1);
+            formData.append('fase2', !!cp.p2);
+            formData.append('fase3', !!cp.p3);
+            formData.append('produccion', prod);
+
+            // Fire and forget (using mode: 'no-cors' requires opaque response)
             fetch(SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
             }).then(() => {
-                console.log("Sent correctly.");
-                // Silent Success
+                console.log("Save request sent (Opaque/No-CORS). Assuming success.");
             }).catch(e => {
-                console.error("Sheet Error:", e);
-                // Keep error alert
-                alert("Error de conexión con Google Sheets.");
+                console.error("Sheet Connection Error:", e);
+                // Keep error alert but less intrusive
             });
         },
 
